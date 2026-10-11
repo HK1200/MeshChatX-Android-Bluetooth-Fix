@@ -363,7 +363,33 @@ export default class MicronParser extends BaseMicronParser {
     }
 
     /**
-     * Split Micron source into blocks for WASM conversion, keeping MeshChat partial-include lines on the JS path.
+     * True when a line contains a multi-row Micron input field. Field
+     * markup is `<flags|name`value> where flags may carry an xN row
+     * count; N > 1 means the field must render as a textarea. The
+     * bundled WASM renderer below v1.3.0 ignores the row count and
+     * emits a single-line input, which silently destroys multi-line
+     * form input, so these lines stay on the JS path.
+     */
+    static lineHasMultilineField(line) {
+        const re = /`<([0-9x?!^]*)\|/g;
+        let m;
+        while ((m = re.exec(line)) !== null) {
+            const flags = m[1].replace(/[?!^]/g, "");
+            const x = flags.indexOf("x");
+            if (x < 0) {
+                continue;
+            }
+            const rowsFlag = flags.slice(x + 1);
+            if (/^\d+$/.test(rowsFlag) && parseInt(rowsFlag, 10) > 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Split Micron source into blocks for WASM conversion, keeping MeshChat
+     * partial-include lines and multi-row field lines on the JS path.
      */
     static splitMicronMarkupWasmSegments(markup) {
         if (markup == null) {
@@ -375,7 +401,11 @@ export default class MicronParser extends BaseMicronParser {
         for (const line of lines) {
             const trimmed = line.trim();
             const isImageLine = line.startsWith("`(") || trimmed.includes("`img=") || trimmed.includes(":/media/");
-            if (MicronParser.PARTIAL_LINE_REGEX.test(trimmed) || isImageLine) {
+            if (
+                MicronParser.PARTIAL_LINE_REGEX.test(trimmed) ||
+                isImageLine ||
+                MicronParser.lineHasMultilineField(line)
+            ) {
                 if (buf.length) {
                     segments.push({ type: "mu", text: buf.join("\n") });
                     buf = [];

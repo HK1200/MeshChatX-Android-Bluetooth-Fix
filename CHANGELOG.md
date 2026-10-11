@@ -20,6 +20,7 @@
 - Traffic tools: the hover guide and dots on the activity chart are round again on wide windows. They now render outside the stretched chart area instead of being squished by it.
 - Remote execute: listener sessions now surface their address even when quiet mode suppresses rnx log output. The manager derives the rnx.execute destination hash from the identity file instead of waiting for a log line that may never come.
 - Tools: rnsh and rnx are out of alpha. Both are covered by live network tests that run a real listener and initiator over a loopback Reticulum link, including the frozen app launcher path.
+- NomadNet browser: multi-line form fields on pages now accept and submit line breaks again. The bundled micron WASM renderer ignored the field row count and drew a single-line box, so posts submitted through forms arrived as one long line. Lines carrying multi-row fields now render through the JS parser on any WASM version, and the bundled renderer is updated to v1.3.0 which draws the textbox correctly on its own.
 
 ## [4.10.6] - 2026-10-09 [released]
 
