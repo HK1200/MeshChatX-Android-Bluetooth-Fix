@@ -75,12 +75,14 @@ describe("ToolsPage.vue", () => {
         expect(wrapper.text()).toContain("common.no_results");
     });
 
-    it("shows an alpha badge on the rnsh tool", () => {
+    it("shows no alpha badge on the rnsh and rnx tools", () => {
         const wrapper = mountToolsPage();
-        const rnsh = wrapper.vm.tools.find((tool) => tool.name === "rnsh");
-        expect(rnsh?.alpha).toBe(true);
+        for (const name of ["rnsh", "rnx"]) {
+            const tool = wrapper.vm.tools.find((t) => t.name === name);
+            expect(tool?.alpha).toBeFalsy();
+        }
         const rnshRow = wrapper.findAll(".tool-row").find((row) => row.text().includes("tools.rnsh.title"));
-        expect(rnshRow?.text()).toContain("tools.alpha_badge");
+        expect(rnshRow?.text()).not.toContain("tools.alpha_badge");
     });
 
     it("shows an alpha badge on the rns-filesync tool", () => {
