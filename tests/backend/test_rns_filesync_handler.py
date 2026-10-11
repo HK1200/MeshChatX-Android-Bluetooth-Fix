@@ -220,6 +220,34 @@ def test_settings_reject_sync_dir_change_while_running(handler):
     assert "stop filesync" in result["error"]
 
 
+def test_update_settings_rejects_sub_minute_announce_interval(handler):
+    from meshchatx.src.backend import constants
+
+    result = handler.update_settings(announce_interval=10)
+    assert result["ok"] is False
+    assert str(constants.MIN_ANNOUNCE_INTERVAL_SECONDS) in result["error"]
+    assert handler._announce_interval == constants.DEFAULT_ANNOUNCE_INTERVAL_SECONDS
+
+
+def test_update_settings_accepts_announce_interval_at_floor(handler):
+    from meshchatx.src.backend import constants
+
+    result = handler.update_settings(
+        announce_interval=constants.MIN_ANNOUNCE_INTERVAL_SECONDS,
+    )
+    assert result["ok"] is True
+    assert handler._announce_interval == constants.MIN_ANNOUNCE_INTERVAL_SECONDS
+
+
+def test_start_rejects_sub_minute_announce_interval(handler):
+    from meshchatx.src.backend import constants
+
+    result = handler.start(announce_interval=30)
+    assert result["ok"] is False
+    assert str(constants.MIN_ANNOUNCE_INTERVAL_SECONDS) in result["error"]
+    assert handler._announce_interval == constants.DEFAULT_ANNOUNCE_INTERVAL_SECONDS
+
+
 def test_list_tree_while_stopped(handler):
     sync = handler._sync_directory
     nested = os.path.join(sync, "docs")

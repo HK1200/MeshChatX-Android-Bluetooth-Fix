@@ -16,6 +16,7 @@
 - Settings: the auto announce interval and the propagation auto sync interval now clamp to a one minute minimum instead of accepting sub-minute values that turn announces and mailbox syncs into mesh wide storms.
 - Relay chat: the log now names the hub when a send budget blocks, warns when a message keeps getting redelivered, and reports how many held messages a rejoin resent.
 - Messages: the log warns when a destination has exhausted its auto-resend budget and messages need a manual retry.
+- File sync: the announce interval setter now enforces the same one minute floor the loader and the UI already use, so an API request can no longer set a sub-minute announce storm.
 
 ## [4.10.6] - 2026-10-09 [released]
 

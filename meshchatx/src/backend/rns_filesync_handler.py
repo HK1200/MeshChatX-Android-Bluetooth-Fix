@@ -1138,8 +1138,11 @@ class RnsFilesyncHandler:
                     interval = int(announce_interval)
                 except (TypeError, ValueError):
                     return err_result("invalid announce_interval")
-                if interval < 10:
-                    return err_result("announce_interval must be >= 10")
+                if interval < constants.MIN_ANNOUNCE_INTERVAL_SECONDS:
+                    return err_result(
+                        "announce_interval must be >= "
+                        + str(constants.MIN_ANNOUNCE_INTERVAL_SECONDS)
+                    )
                 self._announce_interval = interval
 
             try:
@@ -1347,8 +1350,11 @@ class RnsFilesyncHandler:
                     interval = int(announce_interval)
                 except (TypeError, ValueError):
                     return err_result("invalid announce_interval")
-                if interval < 10:
-                    return err_result("announce_interval must be >= 10")
+                if interval < constants.MIN_ANNOUNCE_INTERVAL_SECONDS:
+                    return err_result(
+                        "announce_interval must be >= "
+                        + str(constants.MIN_ANNOUNCE_INTERVAL_SECONDS)
+                    )
                 self._announce_interval = interval
 
             self._save_settings()
