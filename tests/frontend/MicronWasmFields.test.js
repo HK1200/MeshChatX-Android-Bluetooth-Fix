@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import MicronParser from "@/js/MicronParser.js";
 
 /**
@@ -28,8 +29,7 @@ describe("MicronWasmFields (bundled wasm)", () => {
             Go: globalThis.Go,
         };
         // wasm_exec.js registers Go on globalThis as a side effect.
-        const execSrc = readFileSync(resolve(VENDOR, "wasm_exec.js"), "utf8");
-        new Function(execSrc)();
+        await import(pathToFileURL(resolve(VENDOR, "wasm_exec.js")).href);
         const buf = readFileSync(resolve(VENDOR, "micron-parser-go.wasm"));
         const go = new globalThis.Go();
         const { instance } = await WebAssembly.instantiate(buf, go.importObject);
