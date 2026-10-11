@@ -116,6 +116,28 @@ describe("TrafficPage.vue", () => {
         wrapper.unmount();
     });
 
+    it("renders hover markers outside the stretched svg", async () => {
+        const wrapper = mountPage();
+        await waitForData(wrapper);
+        const svg = wrapper.find("svg");
+        svg.element.getBoundingClientRect = () => ({
+            left: 0,
+            top: 0,
+            width: 640,
+            height: 80,
+            right: 640,
+            bottom: 80,
+        });
+        await svg.trigger("mousemove", { clientX: 640 });
+        // preserveAspectRatio="none" stretches every shape inside the svg,
+        // so the hover guide and dots live as percentage positioned divs.
+        expect(wrapper.find("svg circle").exists()).toBe(false);
+        const dots = wrapper.findAll(".rounded-full");
+        expect(dots.length).toBe(2);
+        expect(dots[0].attributes("style")).toContain("left: 100%");
+        wrapper.unmount();
+    });
+
     it("renders active transfers with progress", async () => {
         window.api.get = vi.fn(async () => ({
             data: makePayload({

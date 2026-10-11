@@ -96,72 +96,79 @@
                         </div>
                     </div>
                     <p class="mt-1 text-[10px] text-sem-fg-muted">{{ $t("traffic.chart_hint") }}</p>
-                    <svg
-                        class="mt-2 h-20 w-full cursor-crosshair touch-none"
-                        viewBox="0 0 320 80"
-                        preserveAspectRatio="none"
-                        @mousemove="onSparkMove"
-                        @mouseleave="onSparkLeave"
-                        @touchstart="onSparkMove"
-                        @touchmove="onSparkMove"
-                        @touchend="onSparkLeave"
-                    >
-                        <line
-                            v-for="y in [20, 40, 60]"
-                            :key="y"
-                            x1="0"
-                            :y1="y"
-                            x2="320"
-                            :y2="y"
-                            stroke="var(--mc-border)"
-                            stroke-width="0.5"
-                            stroke-dasharray="3 3"
-                        />
-                        <polygon
-                            v-if="sparkAreaRx"
-                            :points="sparkAreaRx"
-                            fill="var(--mc-info)"
-                            fill-opacity="0.18"
-                            stroke="none"
-                        />
-                        <polygon
-                            v-if="sparkAreaTx"
-                            :points="sparkAreaTx"
-                            fill="var(--mc-warning)"
-                            fill-opacity="0.18"
-                            stroke="none"
-                        />
-                        <polyline
-                            v-if="sparklineRx"
-                            :points="sparklineRx"
-                            fill="none"
-                            stroke="var(--mc-info)"
-                            stroke-width="1.5"
-                            stroke-linejoin="round"
-                        />
-                        <polyline
-                            v-if="sparklineTx"
-                            :points="sparklineTx"
-                            fill="none"
-                            stroke="var(--mc-warning)"
-                            stroke-width="1.5"
-                            stroke-linejoin="round"
-                        />
-                        <line x1="0" y1="79" x2="320" y2="79" stroke="var(--mc-border)" stroke-width="1" />
-                        <template v-if="sparkHover">
+                    <div class="relative mt-2">
+                        <svg
+                            class="h-20 w-full cursor-crosshair touch-none"
+                            viewBox="0 0 320 80"
+                            preserveAspectRatio="none"
+                            @mousemove="onSparkMove"
+                            @mouseleave="onSparkLeave"
+                            @touchstart="onSparkMove"
+                            @touchmove="onSparkMove"
+                            @touchend="onSparkLeave"
+                        >
                             <line
-                                :x1="sparkHover.x"
-                                y1="0"
-                                :x2="sparkHover.x"
-                                y2="79"
-                                stroke="var(--mc-fg-muted)"
+                                v-for="y in [20, 40, 60]"
+                                :key="y"
+                                x1="0"
+                                :y1="y"
+                                x2="320"
+                                :y2="y"
+                                stroke="var(--mc-border)"
                                 stroke-width="0.5"
-                                stroke-dasharray="2 2"
+                                stroke-dasharray="3 3"
                             />
-                            <circle :cx="sparkHover.x" :cy="sparkHover.yTx" r="2.5" fill="var(--mc-warning)" />
-                            <circle :cx="sparkHover.x" :cy="sparkHover.yRx" r="2.5" fill="var(--mc-info)" />
+                            <polygon
+                                v-if="sparkAreaRx"
+                                :points="sparkAreaRx"
+                                fill="var(--mc-info)"
+                                fill-opacity="0.18"
+                                stroke="none"
+                            />
+                            <polygon
+                                v-if="sparkAreaTx"
+                                :points="sparkAreaTx"
+                                fill="var(--mc-warning)"
+                                fill-opacity="0.18"
+                                stroke="none"
+                            />
+                            <polyline
+                                v-if="sparklineRx"
+                                :points="sparklineRx"
+                                fill="none"
+                                stroke="var(--mc-info)"
+                                stroke-width="1.5"
+                                stroke-linejoin="round"
+                            />
+                            <polyline
+                                v-if="sparklineTx"
+                                :points="sparklineTx"
+                                fill="none"
+                                stroke="var(--mc-warning)"
+                                stroke-width="1.5"
+                                stroke-linejoin="round"
+                            />
+                            <line x1="0" y1="79" x2="320" y2="79" stroke="var(--mc-border)" stroke-width="1" />
+                        </svg>
+                        <template v-if="sparkHover">
+                            <div
+                                class="pointer-events-none absolute inset-y-0 w-px border-l border-dashed border-sem-fg-muted/70"
+                                :style="{ left: sparkHoverLeftPct }"
+                            ></div>
+                            <div
+                                class="pointer-events-none absolute h-[6px] w-[6px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+                                :style="{
+                                    left: sparkHoverLeftPct,
+                                    top: sparkHoverTxPct,
+                                    background: 'var(--mc-warning)',
+                                }"
+                            ></div>
+                            <div
+                                class="pointer-events-none absolute h-[6px] w-[6px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+                                :style="{ left: sparkHoverLeftPct, top: sparkHoverRxPct, background: 'var(--mc-info)' }"
+                            ></div>
                         </template>
-                    </svg>
+                    </div>
                     <div
                         v-if="sparkHover"
                         class="pointer-events-none absolute top-16 z-10 w-44 rounded-lg border border-sem-border bg-sem-surface p-2 text-xs shadow-lg"
@@ -482,6 +489,15 @@ export default {
                 left: `${pct}%`,
                 transform: `translateX(${translate})`,
             };
+        },
+        sparkHoverLeftPct() {
+            return `${((this.sparkHover?.x ?? 0) / 320) * 100}%`;
+        },
+        sparkHoverTxPct() {
+            return `${((this.sparkHover?.yTx ?? 0) / 80) * 100}%`;
+        },
+        sparkHoverRxPct() {
+            return `${((this.sparkHover?.yRx ?? 0) / 80) * 100}%`;
         },
         lastUpdatedLabel() {
             const t = this.data?.updated_at;

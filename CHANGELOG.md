@@ -17,6 +17,7 @@
 - Relay chat: the log now names the hub when a send budget blocks, warns when a message keeps getting redelivered, and reports how many held messages a rejoin resent.
 - Messages: the log warns when a destination has exhausted its auto-resend budget and messages need a manual retry.
 - File sync: the announce interval setter now enforces the same one minute floor the loader and the UI already use, so an API request can no longer set a sub-minute announce storm.
+- Traffic tools: the hover guide and dots on the activity chart are round again on wide windows. They now render outside the stretched chart area instead of being squished by it.
 
 ## [4.10.6] - 2026-10-09 [released]
 
