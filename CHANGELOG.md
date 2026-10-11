@@ -1,4 +1,4 @@
-## [4.10.7] - TBD [unreleased]
+## [4.10.7] - 2026-10-11 [released]
 
 ### Added
 
