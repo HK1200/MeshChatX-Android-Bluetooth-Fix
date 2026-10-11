@@ -18,6 +18,8 @@
 - Messages: the log warns when a destination has exhausted its auto-resend budget and messages need a manual retry.
 - File sync: the announce interval setter now enforces the same one minute floor the loader and the UI already use, so an API request can no longer set a sub-minute announce storm.
 - Traffic tools: the hover guide and dots on the activity chart are round again on wide windows. They now render outside the stretched chart area instead of being squished by it.
+- Remote execute: listener sessions now surface their address even when quiet mode suppresses rnx log output. The manager derives the rnx.execute destination hash from the identity file instead of waiting for a log line that may never come.
+- Tools: rnsh and rnx are out of alpha. Both are covered by live network tests that run a real listener and initiator over a loopback Reticulum link, including the frozen app launcher path.
 
 ## [4.10.6] - 2026-10-09 [released]
 

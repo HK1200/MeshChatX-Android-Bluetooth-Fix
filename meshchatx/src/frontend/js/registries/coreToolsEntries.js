@@ -114,7 +114,6 @@ export const CORE_TOOLS_ENTRIES = [
         iconBg: "tool-card__icon bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-200",
         titleKey: "tools.rnsh.title",
         descriptionKey: "tools.rnsh.description",
-        alpha: true,
         group: "network",
     },
     {
@@ -124,7 +123,6 @@ export const CORE_TOOLS_ENTRIES = [
         iconBg: "tool-card__icon bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-200",
         titleKey: "tools.rnx.title",
         descriptionKey: "tools.rnx.description",
-        alpha: true,
         group: "network",
     },
     {

@@ -263,6 +263,77 @@ class RNXSession:
             return True
         return False
 
+    def _listen_address_from_identity(self):
+        """Derive the listener destination hash from the rnx identity file.
+
+        Must be called while holding self._lock. The listener reports its
+        address through RNS.log, which quiet output suppresses entirely, so
+        this computes rnx.execute's destination hash the same way the
+        subprocess does once its identity file exists.
+        """
+        import RNS
+
+        # rnx resolves its identity in exactly this order: the -i path, then
+        # <configdir>/storage/identities/rnx, then the default Reticulum
+        # identity dir. Anything else would be a different identity and
+        # produce a wrong address.
+        configured = (self.config.get("identity_path") or "").strip()
+        config_dir = self.resolved_config_dir
+        if configured:
+            path = configured
+        elif config_dir:
+            path = os.path.join(config_dir, "storage", "identities", "rnx")
+        else:
+            path = os.path.join(
+                os.path.expanduser("~"),
+                ".reticulum",
+                "storage",
+                "identities",
+                "rnx",
+            )
+        try:
+            identity = RNS.Identity.from_file(path)
+        except Exception:
+            return False
+        if identity is None:
+            return False
+        try:
+            dest_hash = RNS.Destination.hash_from_name_and_identity(
+                "rnx.execute", identity
+            )
+        except Exception:
+            return False
+        self.listen_address = dest_hash.hex()
+        return True
+
+    def _listen_address_monitor(self):
+        """Poll for the listener identity file until the address is known.
+
+        Quiet listeners emit no output for append_output to scan, so the
+        address must be derived from the identity file directly. Stops once
+        the address is set, the process exits, or the deadline passes.
+        """
+        deadline = time.time() + 120.0
+        while time.time() < deadline:
+            with self._lock:
+                if (
+                    self.mode != "listen"
+                    or self.listen_address
+                    or self.status != self.STATUS_RUNNING
+                    or self._process is None
+                ):
+                    return
+                found = False
+                try:
+                    found = self._listen_address_from_identity()
+                except Exception:
+                    found = False
+            if found:
+                self.manager._on_session_change(self)
+                self.manager.save()
+                return
+            time.sleep(0.5)
+
     @staticmethod
     def _rnx_module_available():
         try:
@@ -489,6 +560,14 @@ class RNXSession:
             name="mcx-rnx",
         )
         waiter.start()
+
+        if self.mode == "listen" and not self.listen_address:
+            monitor = threading.Thread(
+                target=self._listen_address_monitor,
+                daemon=True,
+                name="mcx-rnx",
+            )
+            monitor.start()
 
         return self.to_dict(include_output_tail=True)
 

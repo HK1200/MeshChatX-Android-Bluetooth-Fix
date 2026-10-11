@@ -574,6 +574,10 @@ def test_rnsh_live_listen_under_landlock_with_storage_home():
             def __init__(self):
                 self.storage_dir = storage
                 self.reticulum_config_dir = rns_dir
+            def resolve_allowed_path(self, user_path):
+                from meshchatx.src.backend.rnsh_manager import RNSHManager
+
+                return RNSHManager.resolve_allowed_path(self, user_path)
             def _on_session_change(self, _s):
                 return None
             def _on_session_output(self, _s, _c):

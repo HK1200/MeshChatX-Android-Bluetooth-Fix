@@ -157,12 +157,16 @@ jobs:
             - name: Run live Reticulum + long-running stress tests
               env:
                   MESHCHAT_LIVE_RETICULUM: "1"
+                  MESHCHAT_LIVE_RNSH: "1"
+                  MESHCHAT_LIVE_RNX: "1"
                   MESHCHAT_LONG_TEST_SECONDS: "120"
               run: |
                   uv run pytest \
                       tests/backend/test_lxmf_live_local_network.py \
                       tests/backend/test_lxmf_live_rejection.py \
                       tests/backend/test_rrc_live_rrcd.py \
+                      tests/backend/test_rnsh_live.py \
+                      tests/backend/test_rnx_live.py \
                       tests/backend/test_long_running_stress.py \
                       -v --timeout=600
 

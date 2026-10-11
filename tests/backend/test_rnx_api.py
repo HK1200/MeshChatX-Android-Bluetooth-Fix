@@ -204,6 +204,65 @@ def test_rnx_listen_address_ignores_verbose_identity_hashes():
     assert session.listen_address == "cccccccccccccccccccccccccccccccc"
 
 
+def test_rnx_listen_address_derived_from_configdir_identity(tmp_path):
+    """Quiet listeners emit no output; the address comes from the identity."""
+    import RNS
+
+    from meshchatx.src.backend.rnx_manager import RNXSession
+
+    identity = RNS.Identity()
+    identity_dir = tmp_path / "storage" / "identities"
+    identity_dir.mkdir(parents=True)
+    identity.to_file(str(identity_dir / "rnx"))
+
+    manager = MagicMock()
+    session = RNXSession(
+        manager,
+        "s1",
+        {"mode": "listen", "config_path": str(tmp_path)},
+    )
+    assert session._listen_address_from_identity() is True
+    expected = RNS.Destination.hash_from_name_and_identity("rnx.execute", identity)
+    assert session.listen_address == expected.hex()
+
+
+def test_rnx_listen_address_from_identity_uses_configured_path(tmp_path):
+    import RNS
+
+    from meshchatx.src.backend.rnx_manager import RNXSession
+
+    identity = RNS.Identity()
+    identity_file = tmp_path / "custom_id"
+    identity.to_file(str(identity_file))
+
+    manager = MagicMock()
+    session = RNXSession(
+        manager,
+        "s1",
+        {
+            "mode": "listen",
+            "config_path": str(tmp_path / "elsewhere"),
+            "identity_path": str(identity_file),
+        },
+    )
+    assert session._listen_address_from_identity() is True
+    expected = RNS.Destination.hash_from_name_and_identity("rnx.execute", identity)
+    assert session.listen_address == expected.hex()
+
+
+def test_rnx_listen_address_missing_identity_returns_false(tmp_path):
+    from meshchatx.src.backend.rnx_manager import RNXSession
+
+    manager = MagicMock()
+    session = RNXSession(
+        manager,
+        "s1",
+        {"mode": "listen", "config_path": str(tmp_path)},
+    )
+    assert session._listen_address_from_identity() is False
+    assert session.listen_address == ""
+
+
 def test_rnx_resize_updates_geometry_without_process():
     from meshchatx.src.backend.rnx_manager import RNXSession
 
