@@ -16,6 +16,7 @@ Quick smoke (seconds)::
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import time
@@ -216,10 +217,14 @@ async def test_soak_websocket_broadcast_under_load(mock_app):
     deadline = time.monotonic() + duration_s
     rounds = 0
     while time.monotonic() < deadline:
-        payload = f'{{"type":"soak","round":{rounds}}}'
-        await real(payload)
+        await real(f'{{"type":"soak","round":{rounds}}}')
         for c in clients:
-            assert c.send_str.await_args[0][0] == payload
+            # The broadcast layer stamps extra fields such as seq into
+            # dict payloads, so match on content, not the raw string.
+            bodies = [json.loads(call.args[0]) for call in c.send_str.await_args_list]
+            assert any(
+                b.get("type") == "soak" and b.get("round") == rounds for b in bodies
+            )
         rounds += 1
     assert rounds > 0
 
@@ -238,9 +243,9 @@ async def test_soak_websocket_broadcast_with_churn(mock_app):
             for c in batch[:20]:
                 c.send_str = AsyncMock(side_effect=ConnectionError("closed"))
         mock_app.websocket_clients.extend(batch)
-        payload = f'{{"wave":{wave}}}'
-        await real(payload)
+        await real(f'{{"wave":{wave}}}')
         for c in mock_app.websocket_clients:
-            assert c.send_str.await_args[0][0] == payload
+            bodies = [json.loads(call.args[0]) for call in c.send_str.await_args_list]
+            assert any(b.get("wave") == wave for b in bodies)
         wave += 1
     assert wave > 0
