@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import MicronParser from "@/js/MicronParser.js";
@@ -15,7 +15,12 @@ import MicronParser from "@/js/MicronParser.js";
 
 const VENDOR = resolve(__dirname, "../../meshchatx/src/frontend/public/vendor/micron-parser-go");
 
-describe("MicronWasmFields (bundled wasm)", () => {
+// The wasm binary is fetched at build time and is not present in jobs
+// that run the frontend suite without a full vendor fetch.
+const wasmPresent = existsSync(resolve(VENDOR, "micron-parser-go.wasm")) && existsSync(resolve(VENDOR, "wasm_exec.js"));
+const describeWasm = wasmPresent ? describe : describe.skip;
+
+describeWasm("MicronWasmFields (bundled wasm)", () => {
     let saved = {};
 
     beforeAll(async () => {
