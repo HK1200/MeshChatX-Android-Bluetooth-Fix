@@ -716,6 +716,8 @@ class RRCHubServer:
             self._handle_join(link, sess, env, outgoing)
         elif t == proto.T_PART:
             self._handle_part(link, sess, env, outgoing)
+        elif t == proto.T_SYNC:
+            self._handle_sync(link, sess, env, outgoing)
         elif t in (proto.T_MSG, proto.T_ACTION, proto.T_NOTICE):
             self._handle_message(link, sess, env, outgoing)
 
@@ -1029,6 +1031,25 @@ class RRCHubServer:
         self._record_message_log(r, sess, env)
         for member in list(members):
             outgoing.append((member, payload))
+        if t in (proto.T_MSG, proto.T_ACTION) and link not in members:
+            # A sender outside the room never receives the fanout echo, so
+            # without a direct receipt its client would show a delivered
+            # message as failed once the echo wait expires.
+            mid = env.get(proto.K_ID)
+            if isinstance(mid, (bytes, bytearray)):
+                outgoing.append(
+                    (
+                        link,
+                        proto.encode(
+                            proto.make_envelope(
+                                proto.T_SEEN,
+                                src=self.identity.hash,
+                                room=r,
+                                body=[bytes(mid)],
+                            ),
+                        ),
+                    ),
+                )
         self._bump("messages_relayed")
 
     def _record_message_log(self, room, sess, env):
@@ -1051,6 +1072,7 @@ class RRCHubServer:
         text = body
         if len(text.encode("utf-8", errors="replace")) > 500:
             text = text[:500] + "..."
+        mid = env.get(proto.K_ID)
         with self._lock:
             self._message_log.append(
                 {
@@ -1060,8 +1082,64 @@ class RRCHubServer:
                     "nick": nick,
                     "kind": "action" if t == proto.T_ACTION else "msg",
                     "text": text,
+                    "mid": bytes(mid) if isinstance(mid, (bytes, bytearray)) else None,
                 },
             )
+
+    def _handle_sync(self, link, sess, env, outgoing):
+        """Answer which of the requester's own envelope ids were relayed.
+
+        Only mids recorded under the requesting peer confirm: answering
+        for any logged mid would turn the hub into an oracle for message
+        ids it relayed for other people.
+        """
+        peer = sess.peer
+        if not isinstance(peer, (bytes, bytearray)):
+            return
+        body = env.get(proto.K_BODY)
+        if not isinstance(body, list):
+            return
+        room = env.get(proto.K_ROOM)
+        r = None
+        if isinstance(room, str) and room.strip():
+            try:
+                r = self._norm_room(room)
+            except ValueError:
+                return
+        want = set()
+        for raw in body:
+            if isinstance(raw, (bytes, bytearray)):
+                want.add(bytes(raw))
+            if len(want) >= proto.SYNC_MAX_MIDS:
+                break
+        if not want:
+            return
+        ph = bytes(peer).hex()
+        found = []
+        with self._lock:
+            for entry in self._message_log:
+                if entry.get("peer") != ph:
+                    continue
+                if r is not None and entry.get("room") != r:
+                    continue
+                mid = entry.get("mid")
+                if isinstance(mid, (bytes, bytearray)) and bytes(mid) in want:
+                    found.append(bytes(mid))
+        if not found:
+            return
+        outgoing.append(
+            (
+                link,
+                proto.encode(
+                    proto.make_envelope(
+                        proto.T_SEEN,
+                        src=self.identity.hash,
+                        room=r,
+                        body=found,
+                    ),
+                ),
+            ),
+        )
 
     def _flush_outgoing(self, outgoing):
         for out_link, payload in outgoing:

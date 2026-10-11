@@ -193,12 +193,14 @@ def test_auto_retry_stops_at_budget_and_resumes(tmp_path, monkeypatch):
     assert all(m.delivery == "failed" for m in msgs)
 
     _self_join(hub)
+    hub._rejoin_retry_pass()
     assert sum(1 for m in msgs if m.delivery == "sent") == 1
     assert sum(1 for m in msgs if m.delivery == "failed") == 2
 
     # The budget refills after a minute; the next rejoin sends one more.
     clock.advance(61)
     _self_join(hub)
+    hub._rejoin_retry_pass()
     assert sum(1 for m in msgs if m.delivery == "sent") == 2
     assert sum(1 for m in msgs if m.delivery == "failed") == 1
 

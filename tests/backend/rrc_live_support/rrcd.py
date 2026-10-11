@@ -16,6 +16,7 @@ Options (positional):
     rate_limit         advertised messages per minute (default 120)
     mode               hub | zombie (default hub)
     drop_msgs          1 to accept chat envelopes without relaying
+    drop_echo          1 to relay chat but withhold the sender's echo
 """
 
 from __future__ import annotations
@@ -162,7 +163,35 @@ def install_drop_route(server):
     server._route = route
 
 
-def run_hub(config_dir, share_dir, port, announce_interval, rate_limit, drop_msgs):
+def install_drop_echo(server):
+    """Relay chat envelopes but withhold the sender's own echo copy.
+
+    The hub still logs and relays the message to other members, so the
+    send is delivered while the client can never confirm it locally.
+    """
+    orig_handle = server._handle_message
+
+    def handle(link, sess, env, outgoing):
+        scratch = []
+        orig_handle(link, sess, env, scratch)
+        t = env.get(proto.K_T)
+        for out_link, payload in scratch:
+            if t in (proto.T_MSG, proto.T_ACTION) and out_link is link:
+                continue
+            outgoing.append((out_link, payload))
+
+    server._handle_message = handle
+
+
+def run_hub(
+    config_dir,
+    share_dir,
+    port,
+    announce_interval,
+    rate_limit,
+    drop_msgs,
+    drop_echo,
+):
     rns = RNS.Reticulum(configdir=config_dir, loglevel=RNS.LOG_ERROR)
     traffic = TrafficLog(os.path.join(share_dir, "hub_traffic.jsonl"))
 
@@ -187,6 +216,8 @@ def run_hub(config_dir, share_dir, port, announce_interval, rate_limit, drop_msg
     install_hub_logging(server, traffic)
     if drop_msgs:
         install_drop_route(server)
+    if drop_echo:
+        install_drop_echo(server)
 
     write_json(
         os.path.join(share_dir, "hub_ready.json"),
@@ -292,6 +323,7 @@ def main():
     rate_limit = int(sys.argv[5]) if len(sys.argv) > 5 else 120
     mode = sys.argv[6] if len(sys.argv) > 6 else "hub"
     drop_msgs = len(sys.argv) > 7 and sys.argv[7] == "1"
+    drop_echo = len(sys.argv) > 8 and sys.argv[8] == "1"
 
     os.makedirs(config_dir, exist_ok=True)
     os.makedirs(share_dir, exist_ok=True)
@@ -299,7 +331,15 @@ def main():
     if mode == "zombie":
         run_zombie(config_dir, share_dir, port, announce_interval)
         return
-    run_hub(config_dir, share_dir, port, announce_interval, rate_limit, drop_msgs)
+    run_hub(
+        config_dir,
+        share_dir,
+        port,
+        announce_interval,
+        rate_limit,
+        drop_msgs,
+        drop_echo,
+    )
 
 
 if __name__ == "__main__":

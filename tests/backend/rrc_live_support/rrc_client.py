@@ -175,6 +175,14 @@ def handle_command(manager, log, command):
     try:
         if op == "connect":
             manager.connect_auto_reconnect_hubs()
+        elif op == "reconnect":
+            hub = manager.hubs[0]
+            with contextlib.suppress(Exception):
+                hub.disconnect()
+            # Teardown callbacks are async: give _on_closed a moment to
+            # settle before the new connect attempt checks the status.
+            time.sleep(1.0)
+            hub.connect()
         elif op == "join":
             room = command.get("room", "lobby")
             for hub in manager.hubs:

@@ -148,6 +148,9 @@ def test_failed_message_auto_retries_once_on_rejoin(tmp_path):
         proto.T_JOINED, src=b"\x44" * 16, room="general", body=[b"\x22" * 16]
     )
     hub._handle_joined(env)
+    # The retry pass is deferred so a T_SEEN resync can land first. Run it
+    # directly instead of waiting out the timer.
+    hub._rejoin_retry_pass()
     assert msg.delivery == "sent"  # loopback echo confirmed the retry
     assert msg.mid == b"\x99" * 8  # retry reuses the original envelope id
 
@@ -157,6 +160,7 @@ def test_failed_message_auto_retries_once_on_rejoin(tmp_path):
         proto.T_JOINED, src=b"\x44" * 16, room="general", body=[b"\x22" * 16]
     )
     hub._handle_joined(env)
+    hub._rejoin_retry_pass()
     assert msg.mid == b"\x99" * 8
 
 
@@ -219,6 +223,7 @@ def test_session_failed_message_auto_retries_with_same_mid_and_ts(tmp_path):
 
     hub._send_env = spy
     _self_join(hub)
+    hub._rejoin_retry_pass()
     resent = [e for e in sent_envs if e.get(proto.K_T) == proto.T_MSG]
     assert len(resent) == 1
     assert resent[0][proto.K_ID] == b"\x99" * 8
@@ -385,9 +390,10 @@ def test_restart_does_not_replay_sent_history(tmp_path):
     """Full restart cycle: delivered history must not repost to the hub.
 
     Reproduces the reported RCC spam: a client sends a message, exits,
-    and its history row loads back as "failed" on the next start because
-    it was persisted while still unconfirmed. Before the fix the rejoin
-    auto-retry reposted it to the hub on every restart.
+    and its history row must load back with the confirmed state, not
+    as "failed", because the echo confirmation is now persisted as an
+    update record. Before the fix the rejoin auto-retry reposted it to
+    the hub on every restart.
     """
     server, hub = _loopback_client_hub(tmp_path)
     hub.send_message("general", "first session message")
@@ -406,12 +412,12 @@ def test_restart_does_not_replay_sent_history(tmp_path):
     hub2 = manager2.hubs[0]
     assert "general" in hub2.rooms
 
-    # The delivered message loads back as failed: the history snapshot
-    # was taken before the echo confirmed it.
+    # The delivered message loads back as sent: the echo confirmation
+    # was persisted as a history update record.
     loaded = [
         m for m in hub2.messages.get("general", []) if m.text == "first session message"
     ]
-    assert loaded and loaded[-1].delivery == "failed"
+    assert loaded and loaded[-1].delivery == "sent"
 
     # Reconnect to the same hub. HELLO -> WELCOME rejoins the saved room,
     # JOINED runs the auto-retry gate, and nothing may reach the wire.
@@ -429,11 +435,18 @@ def test_restart_does_not_replay_sent_history(tmp_path):
 def test_restart_preserves_failed_badge_without_silently_resending(tmp_path):
     """Unconfirmed rows keep their failed badge across restarts."""
     server, hub = _loopback_client_hub(tmp_path)
-    hub.send_message("general", "may or may not have landed")
-    own = [
-        m for m in hub.messages["general"] if m.text == "may or may not have landed"
-    ][-1]
-    assert own.delivery == "sent"
+    # Persist a send whose echo never arrived: it stays unconfirmed.
+    pending = proto.RRCMessage(
+        "msg",
+        "general",
+        b"\x22" * 16,
+        "me",
+        "may or may not have landed",
+        proto.now_ms(),
+    )
+    pending.delivery = "sending"
+    pending.mid = b"\x77" * 8
+    hub._append_history("general", pending)
 
     manager2 = RRCManager(
         identity=FakeIdentity(b"\x22" * 16), storage_dir=str(tmp_path)
@@ -510,5 +523,212 @@ def test_rejoin_retry_logs_resent_count(tmp_path):
     logs = []
     hub._log = lambda msg, level=None: logs.append((level, msg))
     _self_join(hub)
+    hub._rejoin_retry_pass()
 
     assert any("rejoin retry resent 1 held message" in msg for _level, msg in logs)
+
+
+def test_confirm_delivery_appends_sent_update(tmp_path):
+    """The hub echo appends a sent update record to the history file.
+
+    Own rows are first persisted while still sending, which loads back
+    as failed. Without the update record every confirmed send renders
+    as "not delivered to hub" after a restart.
+    """
+    _server, hub = _loopback_client_hub(tmp_path)
+    mid = hub.send_message("general", "persist me")
+    path = hub.manager._history_path(hub, "general")
+    with open(path, "rb") as f:
+        data = f.read()
+    states = []
+    pos = 0
+    while pos < len(data):
+        entry, pos = proto.decode_item(data, pos)
+        if entry.get("id") == mid:
+            states.append(entry.get("d"))
+    assert states == ["sending", "sent"]
+
+
+def test_history_reload_preserves_confirmed_delivery(tmp_path):
+    """A delivered send must still read as sent after a restart."""
+    _server, hub = _loopback_client_hub(tmp_path)
+    mid = hub.send_message("general", "already confirmed")
+    hub.messages["general"] = []
+    hub._load_history()
+    rows = [m for m in hub.messages["general"] if getattr(m, "mid", None) == mid]
+    assert len(rows) == 1
+    assert rows[0].delivery == "sent"
+
+
+def test_history_reload_keeps_unconfirmed_failed(tmp_path):
+    """A send with no update record still loads back as failed."""
+    _server, hub = _loopback_client_hub(tmp_path)
+    msg = proto.RRCMessage("msg", "general", b"\x22" * 16, "me", "echo lost", 0)
+    msg.delivery = "sending"
+    msg.mid = b"\xaa" * 8
+    hub._append_history("general", msg)
+    hub.messages["general"] = []
+    hub._load_history()
+    rows = [
+        m for m in hub.messages["general"] if getattr(m, "mid", None) == b"\xaa" * 8
+    ]
+    assert len(rows) == 1
+    assert rows[0].delivery == "failed"
+
+
+def test_late_own_echo_restores_failed_delivery(tmp_path):
+    """An echo landing after failure is proof of delivery, not a repeat."""
+    _server, hub = _loopback_client_hub(tmp_path)
+    mid = hub.send_message("general", "slow echo")
+    row = [m for m in hub.messages["general"] if getattr(m, "mid", None) == mid][-1]
+    row.delivery = "failed"
+    env = proto.make_envelope(
+        proto.T_MSG,
+        src=b"\x22" * 16,
+        room="general",
+        body="slow echo",
+        mid=mid,
+    )
+    hub._handle_msg(env)
+    assert row.delivery == "sent"
+    assert getattr(row, "dup_count", 1) == 1
+
+
+def test_extra_own_echo_still_counts_as_repeat(tmp_path):
+    """A second echo on an already sent row is a genuine extra copy."""
+    _server, hub = _loopback_client_hub(tmp_path)
+    mid = hub.send_message("general", "echo twice")
+    row = [m for m in hub.messages["general"] if getattr(m, "mid", None) == mid][-1]
+    assert row.delivery == "sent"
+    env = proto.make_envelope(
+        proto.T_MSG,
+        src=b"\x22" * 16,
+        room="general",
+        body="echo twice",
+        mid=mid,
+    )
+    hub._handle_msg(env)
+    assert row.delivery == "sent"
+    assert row.dup_count == 2
+
+
+def test_seen_restores_failed_row(tmp_path):
+    """A T_SEEN receipt flips a failed row back to sent."""
+    _server, hub = _loopback_client_hub(tmp_path)
+    msg = proto.RRCMessage("msg", "general", b"\x22" * 16, "me", "made it", 0)
+    msg.delivery = "failed"
+    msg.mid = b"\xab" * 8
+    msg.seq = 9100
+    hub.messages["general"].append(msg)
+    env = proto.make_envelope(
+        proto.T_SEEN,
+        src=b"\x44" * 16,
+        room="general",
+        body=[b"\xab" * 8],
+    )
+    hub._handle_seen(env)
+    assert msg.delivery == "sent"
+
+
+def test_seen_ignores_unknown_mids(tmp_path):
+    """Receipts for mids we never sent change nothing."""
+    _server, hub = _loopback_client_hub(tmp_path)
+    before = list(hub.messages["general"])
+    env = proto.make_envelope(
+        proto.T_SEEN,
+        src=b"\x44" * 16,
+        room="general",
+        body=[b"\x00" * 8, "junk", b"\x01" * 8],
+    )
+    hub._handle_seen(env)
+    assert hub.messages["general"] == before
+
+
+def test_self_join_sends_sync_for_failed_mids(tmp_path):
+    """A self-JOIN asks the hub which failed mids it already relayed."""
+    _server, hub = _loopback_client_hub(tmp_path)
+    msg = proto.RRCMessage("msg", "general", b"\x22" * 16, "me", "uncertain", 0)
+    msg.delivery = "failed"
+    msg.mid = b"\xcd" * 8
+    msg.seq = 9102
+    hub.messages["general"].append(msg)
+
+    sent = []
+    orig = hub._send_env
+
+    def spy(env):
+        sent.append(env)
+        return orig(env)
+
+    hub._send_env = spy
+    _self_join(hub)
+    sync = [e for e in sent if e.get(proto.K_T) == proto.T_SYNC]
+    assert len(sync) == 1
+    assert sync[0][proto.K_ROOM] == "general"
+    assert sync[0][proto.K_BODY] == [b"\xcd" * 8]
+
+
+def test_self_join_sends_no_sync_without_failed_rows(tmp_path):
+    _server, hub = _loopback_client_hub(tmp_path)
+    sent = []
+    orig = hub._send_env
+
+    def spy(env):
+        sent.append(env)
+        return orig(env)
+
+    hub._send_env = spy
+    _self_join(hub)
+    assert [e for e in sent if e.get(proto.K_T) == proto.T_SYNC] == []
+
+
+def test_seen_confirmed_row_is_not_retried_on_rejoin(tmp_path):
+    """A resync-confirmed failed row must not be resent by the pass."""
+    _server, hub = _loopback_client_hub(tmp_path)
+    msg = proto.RRCMessage("msg", "general", b"\x22" * 16, "me", "made it", 0)
+    msg.delivery = "failed"
+    msg._auto_retryable = True
+    msg.mid = b"\xef" * 8
+    msg.seq = 9103
+    hub.messages["general"].append(msg)
+
+    sent = []
+    orig = hub._send_env
+
+    def spy(env):
+        sent.append(env)
+        return orig(env)
+
+    hub._send_env = spy
+    _self_join(hub)
+    seen = proto.make_envelope(
+        proto.T_SEEN,
+        src=b"\x44" * 16,
+        room="general",
+        body=[b"\xef" * 8],
+    )
+    hub._handle_seen(seen)
+    assert msg.delivery == "sent"
+    hub._rejoin_retry_pass()
+    assert [e for e in sent if e.get(proto.K_T) == proto.T_MSG] == []
+
+
+def test_rejoin_retry_pass_skips_dead_link(tmp_path):
+    """A pass firing after link loss must not burn the retry budget."""
+    _server, hub = _loopback_client_hub(tmp_path)
+    msg = proto.RRCMessage("msg", "general", b"\x22" * 16, "me", "lost?", 0)
+    msg.delivery = "failed"
+    msg._auto_retryable = True
+    msg.mid = b"\x55" * 8
+    msg.seq = 9104
+    hub.messages["general"].append(msg)
+    hub._rejoin_retry_rooms.add("general")
+    link = hub.link
+    hub.link = None
+    calls = []
+    orig = hub.retry_message
+    hub.retry_message = lambda room, seq: calls.append(seq) or orig(room, seq)
+    hub._rejoin_retry_pass()
+    assert calls == []
+    assert getattr(msg, "_auto_retried", False) is False
+    hub.link = link

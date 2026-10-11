@@ -125,7 +125,7 @@ def test_restart_replays_nothing_on_the_wire(tmp_path):
 
 
 def test_in_session_retry_is_bounded_and_idempotent(tmp_path):
-    _server, hub = _loopback_client_hub(tmp_path)
+    server, hub = _loopback_client_hub(tmp_path)
     log = WireLog(hub)
 
     mid = hub.send_message("general", "retry me")
@@ -134,9 +134,14 @@ def test_in_session_retry_is_bounded_and_idempotent(tmp_path):
     hub._pending_delivery.clear()
     own.delivery = "failed"
     own._auto_retryable = True
+    # The hub has no record of the mid, like after a hub restart, so the
+    # resync cannot confirm it and a real retry is required.
+    server._message_log.clear()
 
     _self_join(hub)
+    hub._rejoin_retry_pass()
     _self_join(hub)
+    hub._rejoin_retry_pass()
 
     # Original plus exactly one retry, and the retry reuses the mid.
     assert log.mids() == [mid, mid]
@@ -144,7 +149,7 @@ def test_in_session_retry_is_bounded_and_idempotent(tmp_path):
 
 
 def test_flap_retry_emits_one_copy_with_original_mid(tmp_path):
-    _server, hub = _loopback_client_hub(tmp_path)
+    server, hub = _loopback_client_hub(tmp_path)
     mid = hub.send_message("general", "flap")
     own = [m for m in hub.messages["general"] if m.text == "flap"][-1]
 
@@ -153,15 +158,18 @@ def test_flap_retry_emits_one_copy_with_original_mid(tmp_path):
     hub._pending_delivery[mid] = (own, time.monotonic())
     hub._flush_pending_delivery_locked()
     assert own.delivery == "failed"
+    # Hub restart amnesia: the resync cannot confirm the flap casualty.
+    server._message_log.clear()
 
     log = WireLog(hub)
     _self_join(hub)
+    hub._rejoin_retry_pass()
     assert log.mids() == [mid]
     assert own.delivery == "sent"
 
 
 def test_every_wire_envelope_spends_a_budget_token(tmp_path):
-    _server, hub = _loopback_client_hub(tmp_path)
+    server, hub = _loopback_client_hub(tmp_path)
     log = WireLog(hub)
 
     hub.send_message("general", "one")
@@ -171,7 +179,10 @@ def test_every_wire_envelope_spends_a_budget_token(tmp_path):
     own.delivery = "failed"
     own._auto_retryable = True
     hub._pending_delivery.clear()
+    # Hub restart amnesia: resync cannot confirm, a real retry is needed.
+    server._message_log.clear()
     _self_join(hub)
+    hub._rejoin_retry_pass()
 
     assert len(log.entries) == 4
     assert log.budget_takes == len(log.entries)
@@ -207,7 +218,7 @@ def test_seeded_restart_and_flap_soak(tmp_path):
     per_mid = {}
 
     for step in range(12):
-        action = rng.choice(["send", "fail", "rejoin", "restart"])
+        action = rng.choice(["send", "fail", "rejoin", "restart", "hub_restart"])
         if action == "send":
             try:
                 hub.send_message("general", f"step{step}")
@@ -219,6 +230,7 @@ def test_seeded_restart_and_flap_soak(tmp_path):
         elif action == "rejoin":
             log.clear()
             _self_join(hub)
+            hub._rejoin_retry_pass()
             # Auto-retry is one-shot per message per session.
             mids = log.mids()
             assert len(mids) == len(set(mids))
@@ -235,7 +247,12 @@ def test_seeded_restart_and_flap_soak(tmp_path):
             hub._send_budget_last = time.monotonic()
             log = WireLog(hub)
             _self_join(hub)
+            hub._rejoin_retry_pass()
             assert log.entries == []
+        elif action == "hub_restart":
+            # A restarted hub forgets relayed mids, so the next rejoin
+            # cannot resync-confirm failed rows and must really retry.
+            server._message_log.clear()
         for entry in log.entries:
             per_mid[entry["mid"]] = per_mid.get(entry["mid"], 0) + 1
         log.clear()
@@ -247,7 +264,7 @@ def test_seeded_restart_and_flap_soak(tmp_path):
 
 
 def test_delivery_timeout_sweep_then_retry_is_bounded(tmp_path):
-    _server, hub = _loopback_client_hub(tmp_path)
+    server, hub = _loopback_client_hub(tmp_path)
     log = WireLog(hub)
 
     mid = hub.send_message("general", "slow")
@@ -255,7 +272,11 @@ def test_delivery_timeout_sweep_then_retry_is_bounded(tmp_path):
     hub._pending_delivery[mid] = (own, time.monotonic() - DELIVERY_TIMEOUT_S - 1)
     hub._sweep_pending_delivery()
     assert own.delivery == "failed"
+    # Hub restart amnesia: the sweep casualty cannot be resync-confirmed.
+    server._message_log.clear()
 
     _self_join(hub)
+    hub._rejoin_retry_pass()
     _self_join(hub)
+    hub._rejoin_retry_pass()
     assert log.mids() == [mid, mid]

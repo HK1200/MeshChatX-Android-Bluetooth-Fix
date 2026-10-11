@@ -8,6 +8,8 @@
 
 ### Fixed
 
+- Relay chat: delivered messages no longer show "not delivered to hub" after a restart or reconnect. Echo confirmations are now persisted, a late echo restores a failed row instead of counting it as a repeat, and the client asks the hub which sends it already relayed on rejoin (T_SYNC/T_SEEN) so delivered rows heal without resending.
+- Relay chat: messages sent to a room the client has not joined are now confirmed by a direct hub receipt instead of always expiring as failed.
 - Profile: clearing the display name no longer claims an auto-save and then brings the old name back. The field keeps what you are typing, an empty name sent by any client resets to the default name, and leaving the field empty restores the saved name with a notice.
 - Relay chat: the available rooms section remembers whether it was collapsed or expanded when you navigate away and come back. Mount time auto-selection no longer overwrites the saved layout before it is restored.
 - Relay chat: unreachable hubs no longer spray mesh wide path requests while the reconnect backoff grows. Each hub gets a small burst for the first attempt, then at most one request per minute.

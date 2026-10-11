@@ -185,6 +185,133 @@ def test_message_to_unknown_room_errors():
     assert out[0][1][proto.K_T] == proto.T_ERROR
 
 
+def test_member_send_gets_echo_not_seen():
+    """A joined sender is confirmed by the fanout echo, no extra receipt."""
+    server = make_server()
+    server.register_room("lobby")
+    link = FakeLink(FakeIdentity(b"aaaaaaaaaaaaaaaa"))
+    sess = add_session(server, link, link._identity.hash, nick="alice")
+    route(
+        server,
+        link,
+        sess,
+        proto.make_envelope(proto.T_JOIN, src=sess.peer, room="lobby"),
+    )
+    out = route(
+        server,
+        link,
+        sess,
+        proto.make_envelope(
+            proto.T_MSG, src=sess.peer, room="lobby", body="hi", mid=b"\x01" * 8
+        ),
+    )
+    assert [e for _, e in out if e[proto.K_T] == proto.T_SEEN] == []
+    echo = [e for _, e in out if e[proto.K_T] == proto.T_MSG]
+    assert echo and echo[0][proto.K_ID] == b"\x01" * 8
+
+
+def test_outside_send_gets_seen_receipt():
+    """A non-member sender cannot receive the echo, so the hub acks it."""
+    server = make_server()
+    server.register_room("lobby")
+    link_a = FakeLink(FakeIdentity(b"aaaaaaaaaaaaaaaa"))
+    sess_a = add_session(server, link_a, link_a._identity.hash, nick="alice")
+    link_b = FakeLink(FakeIdentity(b"bbbbbbbbbbbbbbbb"))
+    sess_b = add_session(server, link_b, link_b._identity.hash, nick="bob")
+    route(
+        server,
+        link_a,
+        sess_a,
+        proto.make_envelope(proto.T_JOIN, src=sess_a.peer, room="lobby"),
+    )
+    out = route(
+        server,
+        link_b,
+        sess_b,
+        proto.make_envelope(
+            proto.T_MSG, src=sess_b.peer, room="lobby", body="yo", mid=b"\x02" * 8
+        ),
+    )
+    seen = [e for lnk, e in out if lnk is link_b and e[proto.K_T] == proto.T_SEEN]
+    assert len(seen) == 1
+    assert seen[0][proto.K_BODY] == [b"\x02" * 8]
+    # The room still got the relay.
+    relayed = [e for lnk, e in out if lnk is link_a and e[proto.K_T] == proto.T_MSG]
+    assert relayed and relayed[0][proto.K_ID] == b"\x02" * 8
+
+
+def test_sync_confirms_only_own_mids():
+    """T_SYNC answers only mids logged for the requesting peer."""
+    server = make_server()
+    server.register_room("lobby")
+    link_a = FakeLink(FakeIdentity(b"aaaaaaaaaaaaaaaa"))
+    sess_a = add_session(server, link_a, link_a._identity.hash, nick="alice")
+    link_b = FakeLink(FakeIdentity(b"bbbbbbbbbbbbbbbb"))
+    sess_b = add_session(server, link_b, link_b._identity.hash, nick="bob")
+    route(
+        server,
+        link_a,
+        sess_a,
+        proto.make_envelope(proto.T_JOIN, src=sess_a.peer, room="lobby"),
+    )
+    route(
+        server,
+        link_a,
+        sess_a,
+        proto.make_envelope(
+            proto.T_MSG, src=sess_a.peer, room="lobby", body="mine", mid=b"\x01" * 8
+        ),
+    )
+    route(
+        server,
+        link_b,
+        sess_b,
+        proto.make_envelope(
+            proto.T_MSG,
+            src=sess_b.peer,
+            room="lobby",
+            body="theirs",
+            mid=b"\x02" * 8,
+        ),
+    )
+    out = route(
+        server,
+        link_a,
+        sess_a,
+        proto.make_envelope(
+            proto.T_SYNC,
+            src=sess_a.peer,
+            room="lobby",
+            body=[b"\x01" * 8, b"\x02" * 8, b"\x03" * 8],
+        ),
+    )
+    seen = [e for _, e in out if e[proto.K_T] == proto.T_SEEN]
+    assert len(seen) == 1
+    assert seen[0][proto.K_BODY] == [b"\x01" * 8]
+
+
+def test_sync_with_unknown_mids_replies_nothing():
+    server = make_server()
+    server.register_room("lobby")
+    link = FakeLink(FakeIdentity(b"aaaaaaaaaaaaaaaa"))
+    sess = add_session(server, link, link._identity.hash, nick="alice")
+    route(
+        server,
+        link,
+        sess,
+        proto.make_envelope(proto.T_JOIN, src=sess.peer, room="lobby"),
+    )
+    out = route(
+        server,
+        link,
+        sess,
+        proto.make_envelope(
+            proto.T_SYNC, src=sess.peer, room="lobby", body=[b"\x09" * 8]
+        ),
+    )
+    assert [e for _, e in out if e[proto.K_T] == proto.T_SEEN] == []
+
+
 def test_list_command_matches_client_parser():
     server = make_server()
     server.register_room("general", topic="General chatter")

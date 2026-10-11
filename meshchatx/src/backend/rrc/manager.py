@@ -101,6 +101,11 @@ H_DUP = "c"
 # dropped it (rate limit, crash) or the link is silently wedged.
 DELIVERY_TIMEOUT_S = 15.0
 
+# After a join the client asks the hub which of its failed sends it
+# actually relayed (T_SYNC). The rejoin retry pass waits this long so the
+# T_SEEN reply can restore already delivered rows before they resend.
+REJOIN_RETRY_DELAY_S = 2.5
+
 
 class RateLimitedError(RuntimeError):
     """Raised when a hub's advertised message rate would be exceeded.
@@ -194,6 +199,10 @@ class RRCHub:
         # Envelope id -> (message, sent monotonic). Echo-confirmed, timed out,
         # or flushed failed on link loss.
         self._pending_delivery = {}
+        # Rooms queued for the deferred rejoin retry pass. The delay lets
+        # a T_SEEN reply restore delivered rows before they resend.
+        self._rejoin_retry_rooms = set()
+        self._rejoin_retry_timer = None
         self._last_history_clean = 0
 
         self.available_rooms = {}
@@ -724,6 +733,9 @@ class RRCHub:
             self._room_list_chunks = None
             self._room_list_chunk_src = None
             self._room_list_chunk_timer = None
+            retry_timer = self._rejoin_retry_timer
+            self._rejoin_retry_timer = None
+            self._rejoin_retry_rooms.clear()
             expected = link is getattr(self, "_expected_closed_link", None)
             if expected:
                 self._expected_closed_link = None
@@ -733,6 +745,9 @@ class RRCHub:
         if chunk_timer is not None:
             with contextlib.suppress(Exception):
                 chunk_timer.cancel()
+        if retry_timer is not None:
+            with contextlib.suppress(Exception):
+                retry_timer.cancel()
         if was_welcomed and rooms:
             text = "Disconnected from hub" if manual else "Connection lost"
             self._record_connection_event(text, rooms=rooms)
@@ -1198,7 +1213,50 @@ class RRCHub:
                 msg.delivery = "sent"
         if msg is not None:
             self.manager._notify_messages(self, msg)
+            self._persist_delivery(msg)
         return msg is not None
+
+    def _persist_delivery(self, msg):
+        """Append the current delivery state as a history update record.
+
+        Own rows are first written while still "sending", and a sending
+        row reloads as failed. Without this record every confirmed send
+        would render as "not delivered to hub" after a restart.
+        """
+        self._append_history(getattr(msg, "room", None), msg)
+        self._clean_history()
+
+    def _restore_failed_delivery(self, mid, room=None):
+        """A late echo or T_SEEN proves hub delivery: restore a failed row.
+
+        Returns the restored row, or None when no matching failed row
+        exists. An already confirmed row stays untouched so genuinely
+        extra copies still count as repeats.
+        """
+        if not isinstance(mid, (bytes, bytearray)):
+            return None
+        mid_b = bytes(mid)
+        room_n = room.strip().lower() if isinstance(room, str) else None
+        found = None
+        with self._lock:
+            candidates = [room_n] if room_n else list(self.messages.keys())
+            for r in candidates:
+                if not r:
+                    continue
+                for m in self.messages.get(r, []):
+                    m_mid = getattr(m, "mid", None)
+                    if isinstance(m_mid, (bytes, bytearray)) and bytes(m_mid) == mid_b:
+                        if m.delivery == "failed":
+                            m.delivery = "sent"
+                            found = m
+                        break
+                if found is not None:
+                    break
+        if found is None:
+            return None
+        self.manager._notify_messages(self, found)
+        self._persist_delivery(found)
+        return found
 
     def retry_message(self, room, seq):
         """Resend an own message that failed delivery. Returns the mid.
@@ -1416,6 +1474,10 @@ class RRCHub:
                     continue
                 existing = self._find_duplicate(msgs, m)
                 if existing is not None:
+                    # Later records for the same mid are updates: delivery
+                    # confirmations rewrite the state of the first record.
+                    if m.delivery is not None:
+                        existing.delivery = m.delivery
                     # Update records append the running repeat total and win
                     # by max. Plain repeat rows from files written before
                     # counts existed each stand for one more delivery.
@@ -1718,6 +1780,135 @@ class RRCHub:
             )
             self._send_env(pong)
 
+    def _handle_seen(self, env):
+        """Hub delivery receipts: confirm pending sends, restore failed rows."""
+        body = env.get(proto.K_BODY)
+        if not isinstance(body, list):
+            return
+        room = env.get(proto.K_ROOM)
+        r = room.strip().lower() if isinstance(room, str) and room.strip() else None
+        resolved = 0
+        for raw in body[: proto.SYNC_MAX_MIDS]:
+            if not isinstance(raw, (bytes, bytearray)):
+                continue
+            mid = bytes(raw)
+            if self._confirm_delivery(mid):
+                resolved += 1
+            elif self._restore_failed_delivery(mid, r) is not None:
+                resolved += 1
+        if resolved:
+            self._log(
+                "hub confirmed " + str(resolved) + " earlier send(s) on resync",
+                RNS.LOG_DEBUG,
+            )
+
+    def _request_delivery_sync(self, room):
+        """Ask the hub which of this room's failed sends it relayed.
+
+        Envelope ids are the only payload. Hubs without the feature drop
+        the unknown type, and rows simply stay unconfirmed.
+        """
+        with self._lock:
+            mids = []
+            for m in self.messages.get(room, []):
+                mid = getattr(m, "mid", None)
+                if m.delivery == "failed" and isinstance(mid, (bytes, bytearray)):
+                    b = bytes(mid)
+                    if b not in mids:
+                        mids.append(b)
+            mids = mids[-proto.SYNC_MAX_MIDS :]
+        if not mids:
+            return
+        env = proto.make_envelope(
+            proto.T_SYNC,
+            src=self.manager.identity.hash,
+            room=room,
+            body=mids,
+        )
+        with contextlib.suppress(Exception):
+            self._send_env(env)
+
+    def _queue_rejoin_retry(self, room):
+        """Retry failed sends after the T_SEEN resync window has passed."""
+        with self._lock:
+            self._rejoin_retry_rooms.add(room)
+            if self._rejoin_retry_timer is not None:
+                return
+            self._rejoin_retry_timer = threading.Timer(
+                REJOIN_RETRY_DELAY_S,
+                self._rejoin_retry_pass,
+            )
+            self._rejoin_retry_timer.daemon = True
+            self._rejoin_retry_timer.start()
+
+    def _rejoin_retry_pass(self):
+        with self._lock:
+            rooms = sorted(self._rejoin_retry_rooms)
+            self._rejoin_retry_rooms.clear()
+            self._rejoin_retry_timer = None
+            link = self.link
+        if link is None or link.status != RNS.Link.ACTIVE:
+            return
+        for r in rooms:
+            with contextlib.suppress(Exception):
+                self._retry_failed_for_room(r)
+        self.manager.save()
+
+    def _retry_failed_for_room(self, room):
+        """Resend once messages that failed when the previous link dropped.
+
+        Only in-session failures qualify: history-loaded rows read as
+        "failed" because they were persisted while still unconfirmed,
+        and replaying them duplicates delivered messages on every
+        restart. Command-shaped text is skipped as well: a resent
+        "/..." body executes as a hub command, not a chat message.
+        """
+        retried = 0
+        budget_blocked = False
+        for m in list(self.messages.get(room, [])):
+            if (
+                m.delivery != "failed"
+                or getattr(m, "_auto_retried", False)
+                or not getattr(m, "_auto_retryable", False)
+            ):
+                continue
+            if isinstance(m.text, str) and m.text.lstrip().startswith("/"):
+                continue
+            if not self._has_send_budget():
+                # Hub send budget is spent. Leave the remaining rows
+                # failed so a later rejoin or manual retry can send
+                # them without tripping hub-side enforcement.
+                budget_blocked = True
+                break
+            m._auto_retried = True
+            with contextlib.suppress(Exception):
+                self.retry_message(room, m.seq)
+            retried += 1
+        if retried:
+            # Rejoin replay is bounded but still worth surfacing: a
+            # persistent count here means links keep dropping with
+            # unconfirmed sends on them.
+            self._log(
+                "rejoin retry resent " + str(retried) + " held message(s) to #" + room,
+                RNS.LOG_DEBUG,
+            )
+        if budget_blocked:
+            remaining = sum(
+                1
+                for m in self.messages.get(room, [])
+                if m.delivery == "failed"
+                and getattr(m, "_auto_retryable", False)
+                and not getattr(m, "_auto_retried", False)
+            )
+            self._log(
+                "send budget reached, "
+                + str(remaining)
+                + " failed message(s) in #"
+                + room
+                + " wait for a later rejoin or manual retry",
+                RNS.LOG_INFO,
+            )
+
     def _handle_welcome(self, env):
         self.welcomed = True
         body = env.get(proto.K_BODY)
@@ -1824,58 +2015,13 @@ class RRCHub:
                     with self._lock:
                         self._silent_who_rooms.discard(r)
                         self._silent_who_ts.pop(r, None)
-            # Resend once messages that failed when the previous link dropped.
-            # The JOINED confirm is in, so the retry lands in a real room.
-            # Only in-session failures qualify: history-loaded rows read as
-            # "failed" because they were persisted while still unconfirmed,
-            # and replaying them duplicates delivered messages on every
-            # restart. Command-shaped text is skipped as well: a resent
-            # "/..." body executes as a hub command, not a chat message.
-            retried = 0
-            budget_blocked = False
-            for m in list(self.messages.get(r, [])):
-                if (
-                    m.delivery != "failed"
-                    or getattr(m, "_auto_retried", False)
-                    or not getattr(m, "_auto_retryable", False)
-                ):
-                    continue
-                if isinstance(m.text, str) and m.text.lstrip().startswith("/"):
-                    continue
-                if not self._has_send_budget():
-                    # Hub send budget is spent. Leave the remaining rows
-                    # failed so a later rejoin or manual retry can send
-                    # them without tripping hub-side enforcement.
-                    budget_blocked = True
-                    break
-                m._auto_retried = True
-                with contextlib.suppress(Exception):
-                    self.retry_message(r, m.seq)
-                retried += 1
-            if retried:
-                # Rejoin replay is bounded but still worth surfacing: a
-                # persistent count here means links keep dropping with
-                # unconfirmed sends on them.
-                self._log(
-                    "rejoin retry resent " + str(retried) + " held message(s) to #" + r,
-                    RNS.LOG_DEBUG,
-                )
-            if budget_blocked:
-                remaining = sum(
-                    1
-                    for m in self.messages.get(r, [])
-                    if m.delivery == "failed"
-                    and getattr(m, "_auto_retryable", False)
-                    and not getattr(m, "_auto_retried", False)
-                )
-                self._log(
-                    "send budget reached, "
-                    + str(remaining)
-                    + " failed message(s) in #"
-                    + r
-                    + " wait for a later rejoin or manual retry",
-                    RNS.LOG_INFO,
-                )
+            # The JOINED confirm is in, so the room is real again. First
+            # ask the hub which failed sends it already relayed, then run
+            # the retry pass after the T_SEEN reply has had time to land.
+            # Rows the hub confirms are restored to sent and never resent,
+            # which avoids relaying a second copy of a delivered message.
+            self._request_delivery_sync(r)
+            self._queue_rejoin_retry(r)
             self.manager.save()
         else:
             joiner = None
@@ -1961,9 +2107,11 @@ class RRCHub:
             with self._lock:
                 self._seen_envelope_ids.append(bytes(mid))
             if not confirmed:
-                # The hub relayed our own message back again after delivery
-                # was already confirmed. Count the extra copy on our row.
-                self._bump_duplicate_by_mid(bytes(mid), room)
+                # An echo arriving after the row already failed is still
+                # proof of delivery and restores it. Only when the row was
+                # already sent is this a genuine extra copy to count.
+                if self._restore_failed_delivery(bytes(mid), room) is None:
+                    self._bump_duplicate_by_mid(bytes(mid), room)
             return
         if isinstance(mid, (bytes, bytearray)):
             stale = False
@@ -2277,6 +2425,7 @@ class RRCHub:
         proto.T_MSG: _handle_msg,
         proto.T_ACTION: _handle_action,
         proto.T_NOTICE: _handle_notice,
+        proto.T_SEEN: _handle_seen,
         proto.T_ERROR: _handle_error,
         proto.T_RESOURCE_ENVELOPE: _handle_resource_envelope,
     }

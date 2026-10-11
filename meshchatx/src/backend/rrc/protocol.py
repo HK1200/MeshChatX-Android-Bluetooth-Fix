@@ -46,6 +46,15 @@ T_ERROR = 40
 
 T_RESOURCE_ENVELOPE = 50
 
+# Delivery reconciliation. A client that joined or rejoined a room sends
+# T_SYNC with the envelope ids of its unconfirmed sends; the hub answers
+# T_SEEN with the subset it actually relayed. T_SEEN is also pushed right
+# after relay when the sender is not a room member and so cannot receive
+# the fanout echo.
+T_SYNC = 60
+T_SEEN = 61
+SYNC_MAX_MIDS = 64
+
 B_HELLO_NAME = 0
 B_HELLO_VER = 1
 B_HELLO_CAPS = 2

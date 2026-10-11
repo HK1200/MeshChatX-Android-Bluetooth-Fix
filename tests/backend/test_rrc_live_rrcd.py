@@ -140,7 +140,12 @@ class LiveStack:
     # -- processes ---------------------------------------------------------
 
     def start_hub(
-        self, mode="hub", announce_interval=60, rate_limit=120, drop_msgs=False
+        self,
+        mode="hub",
+        announce_interval=60,
+        rate_limit=120,
+        drop_msgs=False,
+        drop_echo=False,
     ):
         self.hub_share.mkdir(parents=True, exist_ok=True)
         (self.hub_share / "hub_stop").unlink(missing_ok=True)
@@ -155,6 +160,7 @@ class LiveStack:
                 str(rate_limit),
                 mode,
                 "1" if drop_msgs else "0",
+                "1" if drop_echo else "0",
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -476,6 +482,116 @@ def test_live_rrcd_restart_does_not_replay_and_retry_keeps_identity(stack):
     rows = _wait_for(retried, timeout=20.0)
     assert rows is not None, _traffic_summary(stack)
     assert rows[1]["mid"] == original_mid
+    print("traffic:", _traffic_summary(stack))
+
+
+def test_live_rrcd_resync_heals_failed_row_in_session(stack):
+    """A delivered send that missed its echo heals on reconnect.
+
+    The hub withholds the sender's echo, so the client cannot confirm
+    delivery even though the message was relayed. On reconnect the
+    T_SYNC/T_SEEN exchange restores the row, and the deferred retry
+    pass must not send a second copy.
+    """
+    info = stack.start_hub(drop_echo=True)
+    hub_hash = info["dest"]
+    stack.start_client([hub_hash])
+    stack.connect(hub_hash)
+    stack.join()
+
+    row = stack.send_command({"op": "send", "room": "lobby", "text": "lost echo"})
+    assert row.get("ok"), row
+    original_mid = row["mid"]
+
+    def failed_row():
+        state = stack.snapshot()
+        rows = state["hubs"][0]["messages"].get("lobby", [])
+        match = [m for m in rows if m["text"] == "lost echo"]
+        return match[0] if match and match[0]["delivery"] == "failed" else None
+
+    held = _wait_for(failed_row, timeout=30.0)
+    assert held is not None, "message never turned failed"
+    assert held["mid"] == original_mid
+
+    # Bounce the link in the same session. The rejoin resync should heal
+    # the row before the deferred retry pass considers resending it.
+    marker = stack.event_count()
+    stack.send_command(
+        {"op": "reconnect"}, expect_op="reconnect", timeout=CONNECT_TIMEOUT_S
+    )
+    status = stack.wait_status(
+        RRCHub.STATUS_CONNECTED, timeout=CONNECT_TIMEOUT_S, since=marker
+    )
+    assert status is not None, "reconnect never reached connected"
+
+    def healed_row():
+        state = stack.snapshot()
+        rows = state["hubs"][0]["messages"].get("lobby", [])
+        match = [m for m in rows if m["text"] == "lost echo"]
+        return match[0] if match and match[0]["delivery"] == "sent" else None
+
+    healed = _wait_for(healed_row, timeout=30.0)
+    assert healed is not None, "resync never restored the delivered row"
+    assert healed["mid"] == original_mid
+
+    # Past the deferred retry window: the hub must still have seen only
+    # the original envelope for this mid.
+    time.sleep(4)
+    inbound = stack.hub_inbound(msg_type=20, chat_only=True)
+    assert len(inbound) == 1, _traffic_summary(stack)
+    assert inbound[0]["mid"] == original_mid
+    print("traffic:", _traffic_summary(stack))
+
+
+def test_live_rrcd_resync_heals_failed_row_after_restart(stack):
+    """A failed history row heals to sent on rejoin via T_SEEN."""
+    info = stack.start_hub(drop_echo=True)
+    hub_hash = info["dest"]
+    stack.start_client([hub_hash])
+    stack.connect(hub_hash)
+    stack.join()
+
+    row = stack.send_command({"op": "send", "room": "lobby", "text": "echo withheld"})
+    assert row.get("ok"), row
+    original_mid = row["mid"]
+
+    def failed_row():
+        state = stack.snapshot()
+        rows = state["hubs"][0]["messages"].get("lobby", [])
+        match = [m for m in rows if m["text"] == "echo withheld"]
+        return match[0] if match and match[0]["delivery"] == "failed" else None
+
+    held = _wait_for(failed_row, timeout=30.0)
+    assert held is not None, "message never turned failed"
+    assert held["mid"] == original_mid
+
+    # Restart the client from disk. The row loads back as failed, the
+    # rejoin asks the hub which mids it relayed, and T_SEEN restores it.
+    stack.stop_client()
+    stack.start_client([hub_hash], fresh_share=True)
+    stack.announce_now()
+    stack.send_command(
+        {"op": "connect"}, expect_op="connect", timeout=CONNECT_TIMEOUT_S
+    )
+    stack.wait_status(RRCHub.STATUS_CONNECTED, timeout=CONNECT_TIMEOUT_S)
+    stack.join()
+
+    def healed_row():
+        state = stack.snapshot()
+        rows = state["hubs"][0]["messages"].get("lobby", [])
+        match = [m for m in rows if m["text"] == "echo withheld"]
+        return match[0] if match and match[0]["delivery"] == "sent" else None
+
+    healed = _wait_for(healed_row, timeout=30.0)
+    assert healed is not None, "resync never restored the delivered row"
+    assert healed["mid"] == original_mid
+
+    # The row healed without a resend: only the original chat envelope
+    # ever crossed the wire for this mid.
+    time.sleep(4)
+    inbound = stack.hub_inbound(msg_type=20, chat_only=True)
+    assert len(inbound) == 1, _traffic_summary(stack)
+    assert inbound[0]["mid"] == original_mid
     print("traffic:", _traffic_summary(stack))
 
 
