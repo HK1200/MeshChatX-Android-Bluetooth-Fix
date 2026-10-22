@@ -188,134 +188,35 @@
                             </button>
 
                             <transition name="fade">
-                                <div v-if="showContactSupport" class="mt-6 flex flex-col gap-6">
-                                    <div class="flex flex-col gap-3">
-                                        <div
-                                            class="text-xs font-semibold text-sem-fg-muted uppercase tracking-wide flex items-center gap-2"
-                                        >
-                                            <MaterialDesignIcon icon-name="account-circle-outline" class="size-4" />
-                                            {{ $t("about.contact_developer") }}
+                                <div v-if="showContactSupport" class="mt-6 flex flex-col gap-4">
+                                    <div class="flex flex-col gap-2">
+                                        <div class="text-xs font-semibold text-sem-fg-muted uppercase tracking-wide">
+                                            Maintainer
                                         </div>
-                                        <div class="flex flex-col gap-2">
-                                            <div
-                                                class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-sem-surface-muted/40 border border-sem-border"
-                                            >
-                                                <router-link
-                                                    :to="{
-                                                        name: 'messages',
-                                                        params: { destinationHash: developerLxmfPrimary },
-                                                    }"
-                                                    class="flex-1 min-w-0 text-sm font-mono text-sem-fg-muted hover:text-sem-accent dark:hover:text-sem-info break-all leading-snug text-left"
-                                                    :title="$t('about.contact_open_messages')"
-                                                >
-                                                    {{ developerLxmfPrimary }}
-                                                </router-link>
-                                                <button
-                                                    type="button"
-                                                    class="shrink-0 rounded-lg p-1.5 text-sem-fg-muted hover:text-sem-accent text-sem-fg-muted dark:hover:text-sem-info hover:bg-sem-surface-muted transition-colors"
-                                                    :aria-label="$t('about.contact_copy_address')"
-                                                    @click="
-                                                        copyValue(developerLxmfPrimary, 'about.contact_lxmf_address')
-                                                    "
-                                                >
-                                                    <MaterialDesignIcon icon-name="content-copy" class="size-4" />
-                                                </button>
-                                            </div>
-                                            <div
-                                                class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-sem-surface-muted/40 border border-sem-border"
-                                            >
-                                                <router-link
-                                                    :to="{
-                                                        name: 'messages',
-                                                        params: { destinationHash: developerLxmfAlternate },
-                                                    }"
-                                                    class="flex-1 min-w-0 text-sm font-mono text-sem-fg-muted hover:text-sem-accent dark:hover:text-sem-info break-all leading-snug text-left"
-                                                    :title="$t('about.contact_open_messages')"
-                                                >
-                                                    {{ developerLxmfAlternate }}
-                                                </router-link>
-                                                <button
-                                                    type="button"
-                                                    class="shrink-0 rounded-lg p-1.5 text-sem-fg-muted hover:text-sem-accent text-sem-fg-muted dark:hover:text-sem-info hover:bg-sem-surface-muted transition-colors"
-                                                    :aria-label="$t('about.contact_copy_address')"
-                                                    @click="
-                                                        copyValue(developerLxmfAlternate, 'about.contact_alternate')
-                                                    "
-                                                >
-                                                    <MaterialDesignIcon icon-name="content-copy" class="size-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div
-                                            class="text-xs text-sem-fg-muted bg-sem-surface-muted/40 p-3 rounded-xl border border-sem-border flex items-start gap-2"
-                                        >
-                                            <MaterialDesignIcon
-                                                icon-name="information-outline"
-                                                class="size-4 shrink-0 mt-0.5"
-                                            />
-                                            <span>{{ $t("about.contact_propagation_hint") }}</span>
+                                        <div class="text-sm font-semibold text-sem-fg">
+                                            HK1200 — MeshChatX HK
                                         </div>
                                     </div>
 
                                     <div class="border-t border-sem-border/90"></div>
 
                                     <div class="flex flex-col gap-3">
-                                        <div
-                                            class="text-xs font-semibold text-sem-fg-muted uppercase tracking-wide flex items-center gap-2"
+                                        <a
+                                            href="https://github.com/HK1200/MeshChatX-HK"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="text-sm text-sem-accent hover:underline break-all"
                                         >
-                                            <MaterialDesignIcon icon-name="hand-heart" class="size-4" />
-                                            {{ $t("about.donate_label") }}
-                                        </div>
-                                        <div>
-                                            <div
-                                                class="text-xs font-semibold text-sem-fg-muted uppercase tracking-wide mb-1.5"
-                                            >
-                                                {{ $t("about.donate_monero_label") }}
-                                            </div>
-                                            <div
-                                                class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-sem-surface-muted/40 border border-sem-border"
-                                            >
-                                                <span
-                                                    class="flex-1 min-w-0 text-sm font-mono text-sem-fg-muted break-all leading-snug select-all"
-                                                    >{{ moneroDonateAddress }}</span
-                                                >
-                                                <button
-                                                    type="button"
-                                                    class="shrink-0 rounded-lg p-1.5 text-sem-fg-muted hover:text-sem-accent text-sem-fg-muted dark:hover:text-sem-info hover:bg-sem-surface-muted transition-colors"
-                                                    :aria-label="$t('about.donate_copy_monero')"
-                                                    @click="copyValue(moneroDonateAddress, 'about.donate_monero_label')"
-                                                >
-                                                    <MaterialDesignIcon icon-name="content-copy" class="size-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                                            <a
-                                                href="https://ko-fi.com/quad4"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                class="inline-flex flex-1 items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-sem-border bg-sem-surface-muted/40 hover:bg-sem-surface-muted text-sem-fg text-xs font-semibold transition-colors"
-                                            >
-                                                <MaterialDesignIcon
-                                                    icon-name="coffee"
-                                                    class="size-[18px] text-sem-fg-muted"
-                                                />
-                                                {{ $t("about.donate_kofi") }}
-                                            </a>
-                                            <a
-                                                href="https://buymeacoffee.com/quad4"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                class="inline-flex flex-1 items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-sem-border bg-sem-surface-muted/40 hover:bg-sem-surface-muted text-sem-fg text-xs font-semibold transition-colors"
-                                            >
-                                                <MaterialDesignIcon
-                                                    icon-name="cup"
-                                                    class="size-[18px] text-sem-fg-muted"
-                                                />
-                                                {{ $t("about.donate_buymeacoffee") }}
-                                            </a>
-                                        </div>
+                                            Source Code — GitHub
+                                        </a>
+                                        <a
+                                            href="https://github.com/HK1200/MeshChatX-HK/issues"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="text-sm text-sem-accent hover:underline break-all"
+                                        >
+                                            Support &amp; Bug Reports — GitHub Issues
+                                        </a>
                                     </div>
                                 </div>
                             </transition>
@@ -1419,10 +1320,6 @@ export default {
             chromeVersion: null,
             nodeVersion: null,
             showContactSupport: false,
-            developerLxmfPrimary: "f489752fbef161c64d65e385a4e9fc74",
-            developerLxmfAlternate: "43d3309adf27fc446556121b553b56a6",
-            moneroDonateAddress:
-                "83SUg6mmkkVGwCycckLEgRfdmXNm7H9XtVjbGXp5kko71N6pTefYURJeS7WdEGHrz2aagmt4nF3dWg6mHcYs6yu4EokwhTh",
             activeSessions: [],
             activeSessionCount: 0,
             sessionsWsHandler: null,

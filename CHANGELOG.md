@@ -1,3 +1,21 @@
+## MeshChatX HK 4.10.7-HK-1.0.0 — Initial Android Release
+
+- HK1200's fork, currently based on MeshChatX 4.10.7.
+
+- Initial release provides Bluetooth RNode connectivity fixes for Android, including bundled Reticulum Bluetooth compatibility fixes.
+
+### Also Added:
+
+- Android native LXST audio bridge using AudioRecord and AudioTrack.
+- Android LXST calling compatibility improvements, including Codec2 initialization checks and removal of Web Audio dependencies.
+
+### Notes:
+
+- RNode Bluetooth pairing and connection have been tested and are now functional on Android.
+- LXST voice calling requires further testing.
+
+---
+
 ## [4.10.7] - 2026-10-11 [released]
 
 ### Added
