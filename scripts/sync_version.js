@@ -24,6 +24,12 @@ const root = path.resolve(__dirname, "..");
 const pkgPath = path.join(root, "package.json");
 const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
 const version = pkg.version;
+const hk = JSON.parse(
+    fs.readFileSync(path.join(root, "hk-release.json"), "utf8")
+);
+const androidDisplayVersion = hk.displayVersion;
+const androidVersionCode = hk.androidVersionCode;
+
 if (!version || typeof version !== "string") {
     console.error("package.json has no valid 'version' field");
     process.exit(1);
@@ -90,24 +96,22 @@ if (fs.existsSync(licensesBackendPath)) {
     }
 }
 
-const versionParts = version.split(".").map((n) => Number.parseInt(n, 10));
-if (versionParts.length === 3 && versionParts.every((n) => Number.isFinite(n))) {
-    const versionCode = versionParts[0] * 10000 + versionParts[1] * 1000 + versionParts[2];
-    patchFile("android/app/build.gradle", (c) => {
-        let x = c.replace(/versionCode \d+/, `versionCode ${versionCode}`);
-        x = x.replace(/versionName "[^"]+"/, `versionName "${version}"`);
-        return x;
-    });
-}
+patchFile("android/app/build.gradle", (c) => {
+    let x = c.replace(/versionCode \d+/, `versionCode ${androidVersionCode}`);
+    x = x.replace(/versionName "[^"]+"/, `versionName "${androidDisplayVersion}"`);
+    return x;
+});
+
+const archVersion = version.replace(/\+/g, "_").replace(/-/g, "_");
 
 patchFile("packaging/arch/PKGBUILD", (c) => {
-    let x = c.replace(/^pkgver=\d+\.\d+\.\d+(.*)$/m, `pkgver=${version}$1`);
-    x = x.replace(/printf "\d+\.\d+\.\d+\.r%s\.%s"/, `printf "${version}.r%s.%s"`);
+    let x = c.replace(/^pkgver=[^\s]+/m, `pkgver=${archVersion}`);
+    x = x.replace(/printf "[^"]+\.r%s\.%s"/, `printf "${archVersion}.r%s.%s"`);
     return x;
 });
 
 patchFile("packaging/arch/.SRCINFO", (c) =>
-    c.replace(/^(\tpkgver = )\d+\.\d+\.\d+(\.r\d+\.g[0-9a-f]+)$/m, `$1${version}$2`)
+    c.replace(/^(\tpkgver = )[^\s]+/m, (_, prefix) => `${prefix}${archVersion}`)
 );
 
 patchFile("helm/meshchatx/Chart.yaml", (c) => c.replace(/^appVersion: "[^"]+"/m, `appVersion: "${version}"`));

@@ -1066,7 +1066,8 @@ paired_devices_marker = '''    def get_paired_devices(self):
 paired_devices_new = '''    def get_paired_devices(self):
         if self.bt_enabled():
             try:
-                return self.bt_adapter.getDefaultAdapter().getBondedDevices()
+                devices = self.bt_adapter.getDefaultAdapter().getBondedDevices()
+                return list(devices.toArray())
             except Exception as e:
                 RNS.log("Could not query paired Bluetooth devices: "+str(e), RNS.LOG_ERROR)
                 return []

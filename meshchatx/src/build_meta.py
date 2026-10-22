@@ -111,6 +111,19 @@ def channel_prompt_dict() -> dict[str, Any]:
 def display_version(base_version: str) -> str:
     """Version string for UI labels (adds -dev for non-stable builds)."""
     version = str(base_version or "").strip() or "unknown"
+
+    # HK releases use PEP 440 internally and a readable public label.
+    # Example: 4.10.7+hk.1.0.0 -> 4.10.7-HK-1.0.0
+    import re
+
+    match = re.fullmatch(
+        r"(\d+\.\d+\.\d+)\+hk\.(\d+\.\d+\.\d+)",
+        version,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        version = f"{match.group(1)}-HK-{match.group(2)}"
+
     channel = normalize_channel(BUILD_CHANNEL)
     if channel != "stable" and not version.endswith("-dev"):
         return f"{version}-dev"
