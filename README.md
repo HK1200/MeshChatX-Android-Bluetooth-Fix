@@ -1,109 +1,62 @@
-# Reticulum MeshChatX
+# MeshChatX HK
 
-[Русский](lang/README.ru.md) | [Deutsch](lang/README.de.md) | [Italiano](lang/README.it.md) | [中文](lang/README.zh.md) | [日本語](lang/README.ja.md)
+An Android-focused Reticulum client for messaging, voice calls, voicemail, maps and network visualisation, with additional work on device integration and reliability.
 
-Initially MeshChatX was a fork of Reticulum MeshChat by Liam Cottle. It has evolved to be very much different and focused on modern software development principles. It may be buggy due to many changes and adapted to make it more maintainable and end goal of improving stability.
+**[Download the latest release](https://github.com/HK1200/MeshChatX-HK/releases/latest)** · **[Report an issue](https://github.com/HK1200/MeshChatX-HK/issues)** · **[Release history](https://github.com/HK1200/MeshChatX-HK/releases)**
 
-There are many changes from MeshChat: LXST, [RRC](https://rrc.kc1awv.net/0) relay chat, a dedicated Map that is offline ready, raw SQL instead of an ORM, native fetch instead of Axios, latest stable Electron, wheels with bundled frontend, i18n, pnpm 12+ with supply chain security.
+## Install on Android
 
-MeshChatX is also focused on security and privacy, including usage of native OS sandboxing like AppContainer for windows and Landlock for linux.
+1. Open the [latest release](https://github.com/HK1200/MeshChatX-HK/releases/latest) and download the APK for your device:
+   - **arm64:** most current Android phones and tablets, including the OnePlus 13.
+   - **x86_64:** compatible Intel/AMD Android devices and emulators.
+2. Open the downloaded APK and allow installation from your browser or file manager when Android asks.
+3. Open **MeshChatX HK** and complete setup. Existing HK installations signed with the permanent release key can update in place.
 
-**AI Disclaimer:** LLMs may be used to assist with development and maintaining the project, but all code is reviewed by humans and follows best practices.
+Android 7.0 or later is required. No 32-bit APK is provided. Back up your Reticulum identity and app settings before migrating from another build. If Android reports a signing-key conflict, verify your backups before removing an existing installation.
 
-- Website: [meshchatx.com](https://meshchatx.com)
-- Source: [github.com/Quad4-Software/MeshChatX](https://github.com/Quad4-Software/MeshChatX)
-- Mirror: [CodeFloe](https://codefloe.com/Ivan/MeshChatX)
-- PyPI: [reticulum-meshchatx](https://pypi.org/project/reticulum-meshchatx/)
-- Changelog: [CHANGELOG.md](CHANGELOG.md)
-- Donate: [donate.md](donate.md)
-- LXMF: `f489752fbef161c64d65e385a4e9fc74`
+## Features and HK improvements
 
-<a href="https://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://github.com/Quad4-Software/MeshChatX"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" height="60" alt="Get it on Obtainium"></a>
+- Reticulum messaging, voice calls, voicemail, maps and network visualisation.
+- Android lock-screen answer handling, dialer state updates, Bluetooth headset routing and call-session cleanup.
+- Android foreground-service handling for ongoing device connections.
+- Flat, Planet and Radial visualiser views, view controls and saved preferences. WebGL with WASM is supported on capable Android WebViews; a canvas renderer is also available.
+- A built-in updater that checks HK releases and verifies a downloaded APK's signed metadata, size and checksum before saving it. Android handles installation.
+- Voicemail greetings generated with an installed offline Android text-to-speech voice, with the audio libraries needed to encode and play greetings.
+- Checksum-pinned Android dependencies and checks for 16 KB memory-page alignment, including the NumPy/OpenBLAS complex-number correction carried in 1.0.1.
 
-rngit NomadNet Node: `132f67e79d9b24aad014e93015fb858f:/page/index.mu`
+Voicemail speech requires a suitable offline voice installed on the device. Visualiser acceleration depends on the device's WebView and graphics support. See each release's notes for validation results and remaining limitations.
 
-## Install/Usage Methods
+## Versions and updates
 
-There are many ways you can use MeshChatX.
+**4.10.7-HK-1.0.2** identifies the MeshChatX base version and HK release version. The Python form is `4.10.7+hk.1.0.2`.
 
-### Docker
+The stable updater reads `latest.rsm` from the [latest HK application release](https://github.com/HK1200/MeshChatX-HK/releases/latest). The signed manifest and readable `latest.json` are attached alongside the APKs. There is no separate updater-feed release.
 
-```bash
-docker compose -f docker/docker-compose.yml up -d
+Official APKs retain the permanent HK signing certificate:
+
+```text
+SHA-256: e8e1b72b66d882048d8b712fb4fab5983417e55c359f123d8dcdd845bacf667e
 ```
 
-```bash
-docker run -d --name reticulum-meshchatx \
-  -p 127.0.0.1:8000:8000 \
-  -v meshchatx-config:/config \
-  ghcr.io/quad4-software/meshchatx:latest
-```
+The update manifest uses a separate pinned signing identity. Details are in [Android updates and voicemail speech](android/release/UPDATES.md).
 
-Container Images: `quad4io/meshchatx` (Docker Hub) and `ghcr.io/quad4-software/meshchatx`. Hardened and extra tags are in [Installation](docs/en/installation.md).
-
-### PyPI (pip, pipx, uv)
+## Development and validation
 
 ```bash
-pip install reticulum-meshchatx
-# or
-pipx install reticulum-meshchatx
-# or
-uv pip install reticulum-meshchatx
+git clone https://github.com/HK1200/MeshChatX-HK.git
+cd MeshChatX-HK
 ```
 
-```bash
-meshchatx --headless --host 127.0.0.1
-```
+Android release builds use JDK 17, Python 3.11 and Android NDK 27.3.13750724. Native inputs must match the hashes in [native-inputs.json](android/release/native-inputs.json). Release assets include source, native build inputs, checksums and validation evidence. Private signing keys are kept outside the repository.
 
-meshchat is the same entry point. Release wheels from GitHub also work: pip install ./reticulum_meshchatx-*-py3-none-any.whl.
+- [HK 1.0.2 release notes](android/release/RELEASE-1.0.2.md)
+- [Android updates and voicemail speech](android/release/UPDATES.md)
+- [Identity and backup documentation](docs/en/identity-and-security.md)
 
-### From source (git clone, make, task)
+Physical-device testing includes the OnePlus 13 running Android 16. Release reports distinguish phone checks, emulator checks and automated tests. The full NumPy compatibility results include documented failures and are not represented as an entirely passing suite.
 
-HTTPS:
+For HK build questions and bug reports, use [this repository's issue tracker](https://github.com/HK1200/MeshChatX-HK/issues). Include the HK version, Android version, device model and steps to reproduce the problem. Keep private identities, keys and messages out of public reports.
 
-```bash
-git clone https://github.com/Quad4-Software/MeshChatX.git
-cd MeshChatX
+## Licensing
 
-# Over Reticulum (rngit / git-remote-rns):
-
-git clone rns://06a54b505bb67b25ef3f8097e8001edc/public/MeshChatX
-cd MeshChatX
-```
-
-Then install and run with either Make or Task (same targets):
-
-```bash
-make install && make build && make run
-
-# or taskfile
-
-task install && task build && task run
-
-# Or through UV / pnpm yourself:
-
-corepack enable
-pnpm install --frozen-lockfile
-uv sync --group dev
-pnpm run build-frontend
-uv run python -m meshchatx.meshchat --headless --host 127.0.0.1
-```
-
-AppImage, deb, rpm, Flatpak, Electron, and Android: [Installation](docs/en/installation.md) and [Building](docs/en/building.md).
-
-## Docs
-
-| Guide                                                       | Covers                                 |
-| ----------------------------------------------------------- | -------------------------------------- |
-| [Getting started](docs/en/getting-started.md)               | First-day flow                         |
-| [Installation](docs/en/installation.md)                     | Docker details, packages, CLI flags    |
-| [Building](docs/en/building.md)                             | Offline builds, packaging, Android APK |
-| [Development](docs/en/development.md)                       | task/make, versioning, locales         |
-| [Identities and security](docs/en/identity-and-security.md) | Backups, corruption recovery, wipe     |
-| [Platform guides](docs/en/platform-guides/)                 | Pi, Termux, Quest, Linux sandbox       |
-
-## Security, license, credits
-
-- [SECURITY.md](SECURITY.md) · [LEGAL.md](LEGAL.md) · [donate.md](donate.md)
-- Project-owned code is 0BSD. Upstream MeshChat portions remain MIT. Full text: [LICENSE](LICENSE).
-- Credits: [Liam Cottle](https://github.com/liamcottle) (original MeshChat), [RFnexus](https://github.com/RFnexus) (micron parser JS), [markqvist](https://github.com/markqvist) (Reticulum, LXMF, LXST).
+Project licensing, attribution and retained dependency notices are preserved in [LICENSE](LICENSE), [LEGAL.md](LEGAL.md) and the bundled third-party notices.

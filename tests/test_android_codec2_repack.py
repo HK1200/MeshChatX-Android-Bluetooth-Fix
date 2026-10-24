@@ -1,7 +1,7 @@
 """Repeated Android packaging must preserve checksum-pinned wheel inputs."""
 import importlib.util
-from pathlib import Path
 import zipfile
+from pathlib import Path
 
 
 def test_existing_codec2_wheel_is_not_rewritten(tmp_path):
