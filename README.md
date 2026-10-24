@@ -57,6 +57,17 @@ Physical-device testing includes the OnePlus 13 running Android 16. Release repo
 
 For HK build questions and bug reports, use [this repository's issue tracker](https://github.com/HK1200/MeshChatX-HK/issues). Include the HK version, Android version, device model and steps to reproduce the problem. Keep private identities, keys and messages out of public reports.
 
+## Credits
+
+MeshChatX HK builds on the work of:
+
+- **[Quad4](https://github.com/Quad4-Software/MeshChatX)** — MeshChatX and the foundation for the HK build.
+- **[Liam Cottle](https://github.com/liamcottle)** — the original Reticulum MeshChat.
+- **[RFnexus](https://github.com/RFnexus)** — the Micron JavaScript parser.
+- **[markqvist](https://github.com/markqvist)** — Reticulum, LXMF and LXST.
+
+Thanks also to the contributors and dependency authors whose work makes this build possible.
+
 ## Licensing
 
 Project licensing, attribution and retained dependency notices are preserved in [LICENSE](LICENSE), [LEGAL.md](LEGAL.md) and the bundled third-party notices.
