@@ -116,6 +116,22 @@ class _OggCompatLoader(importlib.abc.Loader):
         inject_ctypes_aliases(module)
 
 
+class _AndroidOggCompatLoader(importlib.abc.Loader):
+    """Wrap the original importer and supply missing PyOgg aliases."""
+
+    def __init__(self, original):
+        self.original = original
+
+    def create_module(self, spec):
+        if hasattr(self.original, "create_module"):
+            return self.original.create_module(spec)
+        return None
+
+    def exec_module(self, module):
+        self.original.exec_module(module)
+        inject_ctypes_aliases(module)
+
+
 class _OggCompatFinder(importlib.abc.MetaPathFinder):
     """Intercept LXST pyogg ogg import when disk patch is unavailable."""
 
@@ -126,6 +142,17 @@ class _OggCompatFinder(importlib.abc.MetaPathFinder):
             return None
         ogg = find_ogg_py()
         if ogg is None or not ogg.is_file():
+            for finder in sys.meta_path:
+                if finder is self:
+                    continue
+                find_spec = getattr(finder, "find_spec", None)
+                if find_spec is None:
+                    continue
+                spec = find_spec(fullname, path, target)
+                if spec is not None:
+                    if spec.loader is not None:
+                        spec.loader = _AndroidOggCompatLoader(spec.loader)
+                    return spec
             return None
         try:
             text = ogg.read_text(encoding="utf-8")

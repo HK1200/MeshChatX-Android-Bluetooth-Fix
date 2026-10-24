@@ -50,8 +50,8 @@ android {
         applicationId System.getenv("MESHCHATX_APPLICATION_ID") ?: "com.haadkoe.meshchatx"
         minSdk 24
         targetSdk 35
-        versionCode 100001
-        versionName "4.10.7-HK-1.0.0"
+        versionCode 100002
+        versionName "4.10.7-HK-1.0.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
@@ -108,6 +108,13 @@ android.applicationVariants.all { variant ->
     }
 }
 
+// Verification is read-only. Provision explicitly before Gradle on clean builds.
+tasks.register("verifyOpusJniLibs", Exec) {
+    workingDir = repoRoot
+    commandLine("python3", "scripts/android/provision-opus.py",
+        "--verify-only", "--abis", selectedAndroidAbis.join(","))
+}
+
 tasks.register("syncCodec2JniLibs", Exec) {
     workingDir = repoRoot
     def abiArg = selectedAndroidAbis.join(",")
@@ -150,7 +157,7 @@ tasks.register("verifyVendorWheels") {
         println(bluetoothCheck.standardOutput.asText.get())
 
         def vendorPackages = [
-            "aiohttp": "3.14.3",
+            "aiohttp": "3.14.5",
             "aioquic": "1.3.0",
             "cborx": "0.2.5",
             "cryptography": "50.0.2",
@@ -224,7 +231,7 @@ tasks.register("verifyVendorWheels") {
 
 tasks.configureEach { task ->
     if (task.name == "preBuild") {
-        task.dependsOn(tasks.named("syncCodec2JniLibs"), tasks.named("verifyVendorWheels"))
+        task.dependsOn(tasks.named("syncCodec2JniLibs"), tasks.named("verifyVendorWheels"), tasks.named("verifyOpusJniLibs"))
     }
 }
 
@@ -390,7 +397,7 @@ chaquopy {
             }
             options "--find-links", vendorWheelDir.absolutePath
             install "packaging>=23"
-            install "aiohttp==3.14.3"
+            install "aiohttp==3.14.5"
             if (!rnsPatchedWheel.exists()) {
                 throw new org.gradle.api.GradleException("Missing patched RNS wheel at ${rnsPatchedWheel}")
             }
@@ -450,4 +457,27 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
+}
+
+// Chaquopy's find-links directory is an external dependency input. Track its
+// wheel bytes so rebuilding a local wheel cannot leave a stale packaged copy.
+tasks.matching { it.name.startsWith("install") && it.name.endsWith("PythonRequirements") }.configureEach {
+    inputs.files(fileTree(vendorWheelDir) { include("*.whl") })
+        .withPropertyName("androidVendorWheels")
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+}
+
+if (project.hasProperty("meshchatxRuntimeTests")) {
+    android.testBuildType = "release"
+    android.defaultConfig.testInstrumentationRunner = "com.meshchatx.NumpyInstrumentation"
+    android.sourceSets.androidTest.java.srcDir(new File(repoRoot, "scripts/android/runtime-tests/java"))
+    android.sourceSets.androidTest.assets.srcDir(new File(repoRoot, ".local/android-runtime-assets"))
+}
+
+// A visible target prevents vendor background suspension during long diagnostics.
+// This overlay is deliberately separate from the ordinary test runner flag.
+if (project.hasProperty("meshchatxRuntimeForeground")) {
+    if (!project.hasProperty("meshchatxRuntimeTests")) throw new org.gradle.api.GradleException("meshchatxRuntimeForeground requires meshchatxRuntimeTests")
+    android.sourceSets.release.java.srcDir(new File(repoRoot, "scripts/android/runtime-tests/foreground"))
+    android.sourceSets.release.manifest.srcFile(new File(repoRoot, "scripts/android/runtime-tests/foreground/AndroidManifest.xml"))
 }

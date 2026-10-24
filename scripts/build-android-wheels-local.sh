@@ -257,14 +257,21 @@ if "chaquopy_python_abi3_link" not in text:
     if needle not in text:
         print("Could not find SONAME symlink loop in build-wheel.py", file=sys.stderr)
         sys.exit(1)
-    insert = needle + """
+    # Multiple Python SONAMEs can resolve to libpython.so.
+    # Keep the first valid link rather than attempting to create it twice.
+    guarded = (
+        '                    if not exists(f"{reqs_lib_dir}/{link_filename}"):\n'
+        '                            run(f"ln -s {filename} {reqs_lib_dir}/{link_filename}")'
+    )
+    text = text.replace(needle, guarded, 1)
+    insert = """
 
         # chaquopy_python_abi3_link: PyO3 0.29 abi3 Android builds link libpython3.so (PEP 738).
         python_soname = f"libpython{self.python}.so"
         python_abi3_link = "libpython3.so"
         if exists(f"{reqs_lib_dir}/{python_soname}") and not exists(f"{reqs_lib_dir}/{python_abi3_link}"):
             run(f"ln -s {python_soname} {reqs_lib_dir}/{python_abi3_link}")"""
-    text = text.replace(needle, insert, 1)
+    text = text.replace(guarded, guarded + insert, 1)
     changed = True
 
 if "chaquopy_python_abi3_needed" not in text:
@@ -303,6 +310,48 @@ if "chaquopy_python_abi3_available_lib" not in text:
 
         reqs = set()"""
     text = text.replace(needle, insert, 1)
+    changed = True
+
+if "chaquopy_pyo3_python311_config_generation" not in text:
+    needle = """    def get_rust_env_vars(self, env):
+        tool_prefix = ABIS[self.abi].tool_prefix"""
+    replacement = """    def get_rust_env_vars(self, env):
+        # chaquopy_pyo3_python311_config_generation
+        if self.package == "cryptography" and self.version == "50.0.2":
+            from pathlib import Path
+            pyo3_config = Path(self.build_dir) / "pyo3-android-config.txt"
+            pyo3_config.parent.mkdir(parents=True, exist_ok=True)
+            pyo3_config.write_text(
+                "implementation=CPython\\n"
+                "version=3.10\\n"
+                "target_abi=CPython-abi3-3.10\\n"
+                "shared=true\\n"
+                "build_flags=\\n"
+                "suppress_build_script_link_lines=false\\n"
+                f"lib_name=python{self.python}\\n"
+            )
+
+        tool_prefix = ABIS[self.abi].tool_prefix"""
+    if text.count(needle) != 1:
+        raise SystemExit("Could not locate Rust environment method")
+    text = text.replace(needle, replacement, 1)
+    changed = True
+
+if "chaquopy_pyo3_python311_link" not in text:
+    needle = '            "PYO3_CROSS_PYTHON_VERSION": self.python,'
+    if text.count(needle) != 1:
+        raise SystemExit("Could not locate Chaquopy PyO3 environment")
+
+    replacement = needle + """
+            # chaquopy_pyo3_python311_link: use the versioned Python
+            # library while retaining PyO3's abi3 feature selection.
+            **(
+                {"PYO3_CONFIG_FILE": f"{self.build_dir}/pyo3-android-config.txt"}
+                if self.package == "cryptography" and self.version == "50.0.2"
+                else {}
+            ),"""
+
+    text = text.replace(needle, replacement, 1)
     changed = True
 
 if changed:

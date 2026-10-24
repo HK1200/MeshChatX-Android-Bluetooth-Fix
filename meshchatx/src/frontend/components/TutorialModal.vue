@@ -54,7 +54,7 @@
                         </div>
                         <div class="space-y-2">
                             <h1 class="text-4xl font-black tracking-tight text-sem-fg">
-                                {{ $t("tutorial.welcome") }} <span class="text-sem-accent">MeshChatX</span>
+                                {{ $t("tutorial.welcome") }} <span class="text-sem-accent">MeshChatX HK</span>
                             </h1>
                             <p class="text-lg text-sem-fg-muted max-w-md mx-auto">
                                 {{ $t("tutorial.welcome_desc") }}
@@ -1191,7 +1191,7 @@
                         </div>
                         <div class="space-y-4">
                             <h1 class="text-5xl font-black tracking-tight text-sem-fg">
-                                {{ $t("tutorial.welcome") }} <span class="text-sem-accent">MeshChatX</span>
+                                {{ $t("tutorial.welcome") }} <span class="text-sem-accent">MeshChatX HK</span>
                             </h1>
                             <p class="text-xl text-sem-fg-muted max-w-2xl mx-auto">
                                 {{ $t("tutorial.welcome_desc") }}

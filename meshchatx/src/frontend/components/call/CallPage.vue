@@ -515,6 +515,7 @@
                                                 v-if="activeCall && activeCall.is_incoming && activeCall.status === 4"
                                                 type="button"
                                                 class="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-sem-action-success py-4 text-sm font-bold text-sem-action-success-text shadow-xl shadow-sem-success/20 hover:bg-sem-action-success-hover transition-all duration-200"
+                                                :disabled="answeringCall"
                                                 @click="answerCall"
                                             >
                                                 <MaterialDesignIcon icon-name="phone" class="size-5" />
@@ -1765,6 +1766,7 @@ export default {
         return {
             config: null,
             activeCall: null,
+            answeringCall: false,
             webAudioBridgeRequired: false,
             audioProfiles: [],
             selectedAudioProfileId: null,
@@ -1962,6 +1964,9 @@ export default {
         activeCall() {
             this.stopAudioVisualizer();
         },
+        "activeCall.status"() {
+            this.startStatusPollInterval();
+        },
     },
     mounted() {
         this.getConfig();
@@ -1984,6 +1989,7 @@ export default {
         GlobalEmitter.on(EMITTER_EVENTS.WEBSOCKET_RECONNECTED, this.onWebsocketReconnected);
         GlobalEmitter.on(EMITTER_EVENTS.IDENTITY_SWITCHED, this.onIdentitySwitched);
 
+        document.addEventListener("visibilitychange", this.onCallPageVisibilityChange);
         this.startStatusPollInterval();
         this._liveTransportReadyWatch = this.$watch(
             () => useNetworkStore().liveTransportReady,
@@ -2031,6 +2037,7 @@ export default {
             this._liveTransportReadyWatch = null;
         }
 
+        document.removeEventListener("visibilitychange", this.onCallPageVisibilityChange);
         if (this.statusInterval) clearInterval(this.statusInterval);
         if (this.historyInterval) clearInterval(this.historyInterval);
         if (this.elapsedTimeInterval) clearInterval(this.elapsedTimeInterval);
@@ -2055,12 +2062,20 @@ export default {
                 clearInterval(this.statusInterval);
                 this.statusInterval = null;
             }
-            const statusMs = useNetworkStore().liveTransportReady ? 15000 : 1000;
+            // Notification answer happens outside Vue. Refresh ringing state
+            // quickly even while the live transport still reports connected.
+            const ringing = this.activeCall?.status === 4;
+            const statusMs = useNetworkStore().liveTransportReady && !ringing ? 15000 : 1000;
             this.statusInterval = setInterval(() => {
                 this.getStatus();
                 this.getVoicemailStatus();
                 this.getRingtoneStatus();
             }, statusMs);
+        },
+        onCallPageVisibilityChange() {
+            if (document.visibilityState === "visible") {
+                this.getStatus();
+            }
         },
         onWebsocketReconnected() {
             this.getStatus();
@@ -2366,6 +2381,10 @@ export default {
                 return;
             }
             if (this.isMeshChatXAndroid()) {
+                // Keep the existing native audio session during status polls.
+                if (this.useAndroidNativeTelephone) {
+                    return;
+                }
                 this.stopWebAudio();
                 if (
                     !window.MeshChatXAndroid ||
@@ -2378,10 +2397,9 @@ export default {
                     );
                     return;
                 }
-                const telMic = window.MeshChatXAndroid.isTelephoneNativeAudioAvailable;
                 const micOk =
-                    typeof telMic === "function"
-                        ? telMic()
+                    typeof window.MeshChatXAndroid.isTelephoneNativeAudioAvailable === "function"
+                        ? window.MeshChatXAndroid.isTelephoneNativeAudioAvailable()
                         : window.MeshChatXAndroid.isNativePcmAudioAvailable?.() === true;
                 if (!micOk) {
                     await this.disableWebAudioBridgeWithError(
@@ -2677,8 +2695,10 @@ export default {
         async requestAudioPermission() {
             try {
                 if (this.isMeshChatXAndroid()) {
-                    const tel = window.MeshChatXAndroid?.isTelephoneNativeAudioAvailable;
-                    if (typeof tel === "function" && tel()) {
+                    if (
+                        typeof window.MeshChatXAndroid?.isTelephoneNativeAudioAvailable === "function" &&
+                        window.MeshChatXAndroid.isTelephoneNativeAudioAvailable()
+                    ) {
                         this.webAudioMicReady = true;
                         this.webAudioStartBlocked = false;
                         return true;
@@ -2776,8 +2796,26 @@ export default {
                     this.remoteAudioLevel = Math.max(this.remoteAudioLevel, this.remoteAudioTarget);
                     return;
                 }
-                if (d && d.kind === "error" && d.detail) {
-                    this.logWebAudioFailure("android-native", new Error(String(d.sub || d.detail || "error")));
+                if (d && (d.kind === "error" || d.kind === "closed")) {
+                    const reason = String(d.sub || d.detail || d.kind);
+                    this.logWebAudioFailure(
+                        "android-native",
+                        new Error(reason)
+                    );
+
+                    // Server messages and shutdown timeout warnings do not
+                    // establish that the current audio session has failed.
+                    const informationalError =
+                        d.kind === "error" &&
+                        (
+                            d.sub === "server" ||
+                            d.sub === "microphone_shutdown_timeout" ||
+                            d.sub === "playback_shutdown_timeout"
+                        );
+
+                    if (!informationalError && this.useAndroidNativeTelephone) {
+                        this.stopWebAudio();
+                    }
                 }
             };
             window.addEventListener("meshchatx-native-telephone-audio", this.androidNativeTelephoneListener);
@@ -3017,6 +3055,7 @@ export default {
                     this.wasVoicemail = false;
                     this.lastCall = null;
                 }
+                return newCall;
             } catch (e) {
                 console.log(e);
             }
@@ -3799,13 +3838,32 @@ export default {
             }, 200);
         },
         async answerCall() {
+            if (this.answeringCall) return;
+            const callHash = this.activeCall?.hash;
+            if (!callHash) return;
+            this.answeringCall = true;
+            const alreadyAnswered = (call) =>
+                call?.hash === callHash && call.is_incoming && [5, 6].includes(call.status);
             try {
+                // The lock-screen banner may already have answered this call.
+                const current = await this.getStatus();
+                if (current === undefined) throw new Error("Could not refresh call state");
+                if (!current || current.hash !== callHash || alreadyAnswered(current)) return;
+                if (!current.is_incoming || current.status !== 4) return;
                 if (this.webAudioBridgeEnabled) {
                     await this.requestAudioPermission();
                 }
                 await window.api.post(apiPath("/telephone/answer"));
+                await this.getStatus();
             } catch {
-                ToastUtils.error(this.$t("call.failed_to_answer_call"));
+                // A notification answer can win the race after our preflight.
+                // Suppress only a confirmed answer of this exact incoming call.
+                const current = await this.getStatus();
+                if (!alreadyAnswered(current)) {
+                    ToastUtils.error(this.$t("call.failed_to_answer_call"));
+                }
+            } finally {
+                this.answeringCall = false;
             }
         },
         async hangupCall() {

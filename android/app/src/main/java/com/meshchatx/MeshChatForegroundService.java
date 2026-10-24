@@ -21,12 +21,21 @@ public class MeshChatForegroundService extends Service {
             startForeground(
                 FG_NOTIFICATION_ID,
                 notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                // Keep external mesh links alive; this is not a bounded data-sync job.
+                // The manifest already declares connectedDevice and its prerequisites.
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
             );
         } else {
             startForeground(FG_NOTIFICATION_ID, notification);
         }
         return START_STICKY;
+    }
+
+    @Override
+    public void onTimeout(int startId, int foregroundServiceType) {
+        // Android 15+ requires a timed-out service to stop promptly.
+        stopForeground(STOP_FOREGROUND_REMOVE);
+        stopSelf();
     }
 
     private Notification buildForegroundNotification() {

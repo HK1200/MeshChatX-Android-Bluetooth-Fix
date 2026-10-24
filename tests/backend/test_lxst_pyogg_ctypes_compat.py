@@ -122,3 +122,95 @@ def test_patch_cli_exit_codes(monkeypatch, status, expected_code):
     monkeypatch.setattr(compat, "apply_disk_patch", lambda: status)
     monkeypatch.setattr(compat, "find_ogg_py", lambda: Path("/tmp/ogg.py"))
     assert compat.patch_cli() == expected_code
+
+
+def test_android_asset_loader_injects_aliases(monkeypatch):
+    """Chaquopy-style asset imports work without an ogg.py filesystem path."""
+    import importlib.abc
+    import importlib.machinery
+
+    class FakeAssetLoader(importlib.abc.Loader):
+        def create_module(self, spec):
+            return None
+
+        def exec_module(self, module):
+            module.PYOGG_OGG_AVAIL = False
+
+    class FakeAssetFinder(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname == compat._OGG_MODULE:
+                return importlib.machinery.ModuleSpec(
+                    fullname, FakeAssetLoader()
+                )
+            return None
+
+    finder = compat._OggCompatFinder()
+    monkeypatch.setattr(compat, "find_ogg_py", lambda: None)
+    monkeypatch.setattr(
+        sys, "meta_path", [finder, FakeAssetFinder()]
+    )
+
+    spec = finder.find_spec(compat._OGG_MODULE, None)
+
+    assert spec is not None
+    assert isinstance(spec.loader, compat._AndroidOggCompatLoader)
+
+    module = type(sys)(compat._OGG_MODULE)
+    spec.loader.exec_module(module)
+
+    for name in (
+        "c_int_p",
+        "c_float_p",
+        "c_uchar_p",
+        "c_char_p_p",
+        "c_uchar",
+    ):
+        assert hasattr(module, name), f"Missing ctypes alias: {name}"
+
+    assert module.PYOGG_OGG_AVAIL is False
+
+
+def test_android_asset_loader_injects_aliases(monkeypatch):
+    """Chaquopy-style asset imports work without an ogg.py filesystem path."""
+    import importlib.abc
+    import importlib.machinery
+
+    class FakeAssetLoader(importlib.abc.Loader):
+        def create_module(self, spec):
+            return None
+
+        def exec_module(self, module):
+            module.PYOGG_OGG_AVAIL = False
+
+    class FakeAssetFinder(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname == compat._OGG_MODULE:
+                return importlib.machinery.ModuleSpec(
+                    fullname, FakeAssetLoader()
+                )
+            return None
+
+    finder = compat._OggCompatFinder()
+    monkeypatch.setattr(compat, "find_ogg_py", lambda: None)
+    monkeypatch.setattr(
+        sys, "meta_path", [finder, FakeAssetFinder()]
+    )
+
+    spec = finder.find_spec(compat._OGG_MODULE, None)
+
+    assert spec is not None
+    assert isinstance(spec.loader, compat._AndroidOggCompatLoader)
+
+    module = type(sys)(compat._OGG_MODULE)
+    spec.loader.exec_module(module)
+
+    for name in (
+        "c_int_p",
+        "c_float_p",
+        "c_uchar_p",
+        "c_char_p_p",
+        "c_uchar",
+    ):
+        assert hasattr(module, name), f"Missing ctypes alias: {name}"
+
+    assert module.PYOGG_OGG_AVAIL is False

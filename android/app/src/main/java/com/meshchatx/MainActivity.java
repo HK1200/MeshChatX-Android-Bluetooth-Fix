@@ -1135,30 +1135,49 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void dispatchCallNotificationAction() {
-        if (webView == null) {
+        if (webView == null || pendingCallNotificationAction == null) {
             return;
         }
-        if (pendingCallNotificationAction == null) {
-            return;
-        }
+
         String action = pendingCallNotificationAction;
         pendingCallNotificationAction = null;
+
         String js;
-        if ("decline".equals(action)) {
-            js =
-                "(function(){" +
-                "fetch('/api/v1/telephone/hangup', { credentials: 'include' }).catch(function(){});})();";
-        } else if ("answer".equals(action)) {
-            js =
-                "(function(){" +
-                "fetch('/api/v1/telephone/answer', { credentials: 'include' })" +
-                ".then(function(){ try { window.location.hash = '#/call?tab=phone'; } catch (e) {}})" +
-                ".catch(function(){});})();";
+
+        if ("answer".equals(action) || "decline".equals(action)) {
+            String endpoint = "answer".equals(action)
+                ? "/api/v1/telephone/answer"
+                : "/api/v1/telephone/hangup";
+
+            js = "(async function(){"
+                + "try {"
+                + "const csrfResponse = await fetch('/api/v1/auth/csrf',"
+                + "{credentials:'include'});"
+                + "if(!csrfResponse.ok) throw new Error('CSRF HTTP '+csrfResponse.status);"
+                + "const csrfData = await csrfResponse.json();"
+                + "if(!csrfData.csrf_token) throw new Error('Missing CSRF token');"
+                + "const response = await fetch('" + endpoint + "',{"
+                + "method:'POST',credentials:'include',"
+                + "headers:{'X-CSRF-Token':csrfData.csrf_token}});"
+                + "if(!response.ok) {"
+                + "throw new Error('Call action HTTP '+response.status);"
+                + "}"
+                + ("answer".equals(action)
+                    ? "window.location.hash='#/call?tab=phone';"
+                    : "")
+                + "} catch(e) {"
+                + "console.error('Call notification action failed:',e);"
+                + "}"
+                + "})();";
         } else if ("open".equals(action)) {
-            js = "(function(){" + "try { window.location.hash = '#/call?tab=phone'; } catch (e) {}" + "})();";
+            js = "(function(){"
+                + "window.location.hash='#/call?tab=phone';"
+                + "return 'opened';"
+                + "})();";
         } else {
             return;
         }
+
         webView.evaluateJavascript(js, null);
     }
 
@@ -2374,8 +2393,7 @@ public class MainActivity extends AppCompatActivity {
                 if (activity.telephoneNativeSession == null) {
                     activity.telephoneNativeSession = new TelephoneNativeAudioSession(activity);
                 }
-                activity.telephoneNativeSession.start();
-                return "ok";
+                return activity.telephoneNativeSession.start();
             } catch (Exception e) {
                 return e.getMessage() != null ? e.getMessage() : "err";
             }

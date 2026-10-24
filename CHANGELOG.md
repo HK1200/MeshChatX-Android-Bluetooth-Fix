@@ -1,3 +1,18 @@
+## MeshChatX HK 4.10.7-HK-1.0.1 — Android voice and Bluetooth fixes
+
+- Fix native call audio framing, playback and session cleanup.
+- Fix the dialer remaining on Accept after answering from a locked-screen notification.
+- Prevent duplicate answer requests and misleading errors after a notification answers the same call.
+- Route call playback and microphone through connected Bluetooth call headsets and release the route after calls.
+- Add checksum-verified, missing-only Opus provisioning and build verification.
+- Prepare isolated, checksum-pinned 64-bit native release inputs while preserving the original development libraries.
+- Correct the first-launch tutorial branding to MeshChatX HK.
+- Fix OpenBLAS complex-return ABI and NumPy extended-precision exception reporting in the 16 KB native inputs.
+
+Release validation and signing/migration requirements are recorded in `android/release/README.md`. The existing 1.0.0 release notes below describe that earlier release.
+
+---
+
 ## MeshChatX HK 4.10.7-HK-1.0.0 — Initial Android Release
 
 - HK1200's fork, currently based on MeshChatX 4.10.7.

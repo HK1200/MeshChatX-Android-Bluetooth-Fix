@@ -1,9 +1,9 @@
 {
     "upstreamVersion": "4.10.7",
-    "hkVersion": "1.0.0",
-    "displayVersion": "4.10.7-HK-1.0.0",
-    "pythonVersion": "4.10.7+hk.1.0.0",
-    "androidVersionCode": 100001,
+    "hkVersion": "1.0.1",
+    "displayVersion": "4.10.7-HK-1.0.1",
+    "pythonVersion": "4.10.7+hk.1.0.1",
+    "androidVersionCode": 100002,
     "buildChannel": "stable",
-    "githubRepository": "HK1200/MeshChatX-Android-Bluetooth-Fix"
+    "githubRepository": "HK1200/MeshChatX-HK"
 }

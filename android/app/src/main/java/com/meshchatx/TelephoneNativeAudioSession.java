@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat;
 
 import org.json.JSONObject;
 
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import okhttp3.Request;
@@ -41,6 +42,15 @@ public final class TelephoneNativeAudioSession {
     private final Context appContext;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean pipelinesReady = new AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicLong sessionGeneration =
+        new java.util.concurrent.atomic.AtomicLong(0L);
+    // Guarded by this session's monitor.
+    private boolean cleanupInProgress = false;
+    // Guarded by this session's monitor; initialization runs on the UI thread.
+    private boolean initializationInProgress = false;
+    // Guarded by this session's monitor; cleanup waits for initialization.
+    private boolean cleanupPendingInitialization = false;
+    private volatile int microphoneFrameMs = 60;
     private final MainActivity activity;
 
     @Nullable
@@ -53,10 +63,19 @@ public final class TelephoneNativeAudioSession {
     private Thread sendThread;
     @Nullable
     private Thread connectThread;
+
+    // Keep WebSocket reception independent of AudioTrack playback.
+    private static final int PLAYBACK_QUEUE_CAPACITY = 3;
+    private final ArrayBlockingQueue<ByteString> playbackQueue =
+        new ArrayBlockingQueue<>(PLAYBACK_QUEUE_CAPACITY);
+    @Nullable
+    private Thread playbackThread;
     @Nullable
     private AudioManager audioManager;
     @Nullable
     private AudioFocusRequest audioFocusRequest;
+    @Nullable
+    private TelephoneBluetoothRoute bluetoothRoute;
     private final AudioManager.OnAudioFocusChangeListener audioFocusListener = focusChange -> {
     };
 
@@ -76,65 +95,153 @@ public final class TelephoneNativeAudioSession {
         return running.get();
     }
 
-    public void start() {
+    public synchronized String start() {
+        if (cleanupInProgress) {
+            return "cleanup_in_progress";
+        }
         if (running.get() || connectThread != null) {
-            return;
+            return "busy";
         }
         if (!canRun(appContext)) {
             postDispatch("error", "no_record_audio_permission", null);
-            return;
+            return "no_record_audio_permission";
         }
+        final long generation = sessionGeneration.incrementAndGet();
         connectThread = new Thread(
             () -> {
                 try {
-                    openWebSocket();
+                    openWebSocket(generation);
                 } finally {
-                    connectThread = null;
+                    synchronized (TelephoneNativeAudioSession.this) {
+                        if (connectThread == Thread.currentThread()) {
+                            connectThread = null;
+                        }
+                    }
                 }
             },
             "meshchatx-tel-ws"
         );
         connectThread.setPriority(Thread.NORM_PRIORITY);
         connectThread.start();
+        return "ok";
     }
 
     public void stop() {
-        running.set(false);
-        pipelinesReady.set(false);
-        if (webSocket != null) {
+        final WebSocket socketToClose;
+
+        synchronized (this) {
+            final long generation = sessionGeneration.get();
+            sessionGeneration.incrementAndGet();
+            running.set(false);
+            pipelinesReady.set(false);
+
+            socketToClose = webSocket;
+            webSocket = null;
+
+            startCleanupWorkerLocked(generation);
+        }
+
+        if (socketToClose != null) {
             try {
-                webSocket.close(1000, "client stop");
+                socketToClose.close(1000, "client stop");
             } catch (Exception ignored) {
             }
-            webSocket = null;
         }
-        if (sendThread != null) {
-            try {
-                sendThread.join(2000L);
-            } catch (InterruptedException ignored) {
-            }
-            sendThread = null;
-        }
-        releaseAudio();
     }
 
-    private void postReleaseAfterStop() {
-        if (sendThread == null) {
-            releaseTx();
+    private void awaitInitializationCompletion() {
+        boolean interrupted = false;
+
+        synchronized (this) {
+            while (initializationInProgress) {
+                try {
+                    wait();
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
+            }
+        }
+
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    // Must be called while holding this session's monitor.
+    private void startCleanupWorkerLocked(long generation) {
+        if (cleanupInProgress) {
             return;
         }
+
+        cleanupInProgress = true;
+
         new Thread(
             () -> {
-                if (sendThread != null) {
-                    try {
-                        sendThread.join(2000L);
-                    } catch (InterruptedException ignored) {
+                try {
+                    awaitInitializationCompletion();
+
+                    stopMicrophoneCapture();
+
+                    final Thread microphoneThread;
+                    synchronized (TelephoneNativeAudioSession.this) {
+                        microphoneThread = sendThread;
+                    }
+
+                    if (microphoneThread != null
+                            && microphoneThread != Thread.currentThread()) {
+                        boolean interrupted = false;
+                        boolean timeoutReported = false;
+                        final long warningDeadline =
+                            android.os.SystemClock.elapsedRealtime() + 5000L;
+
+                        while (microphoneThread.isAlive()) {
+                            try {
+                                microphoneThread.join(500L);
+                            } catch (InterruptedException e) {
+                                interrupted = true;
+                            }
+
+                            if (!timeoutReported
+                                    && microphoneThread.isAlive()
+                                    && android.os.SystemClock.elapsedRealtime()
+                                        >= warningDeadline) {
+                                timeoutReported = true;
+                                postDispatchForGeneration(
+                                    generation,
+                                    "error",
+                                    "microphone_shutdown_timeout",
+                                    "Microphone worker did not stop within five seconds"
+                                );
+                            }
+                        }
+
+                        if (interrupted) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+
+                    synchronized (TelephoneNativeAudioSession.this) {
+                        if (sendThread == microphoneThread) {
+                            sendThread = null;
+                        }
+                    }
+
+                    releaseAudio(generation);
+                } finally {
+                    synchronized (TelephoneNativeAudioSession.this) {
+                        cleanupPendingInitialization = false;
+                        cleanupInProgress = false;
                     }
                 }
-                releaseTx();
             },
             "meshchatx-tel-cleanup"
         ).start();
+    }
+
+    private void postReleaseAfterStop(long generation) {
+        synchronized (this) {
+            startCleanupWorkerLocked(generation);
+        }
     }
 
     @SuppressWarnings("WeakerAccess")
@@ -142,7 +249,7 @@ public final class TelephoneNativeAudioSession {
         stop();
     }
 
-    private void openWebSocket() {
+    private void openWebSocket(long generation) {
         String cookie = "";
         try {
             String c = CookieManager.getInstance().getCookie("https://127.0.0.1:8000");
@@ -151,25 +258,34 @@ public final class TelephoneNativeAudioSession {
             }
         } catch (Exception ignored) {
         }
-        running.set(true);
-        pipelinesReady.set(false);
         Request.Builder rb = new Request.Builder().url("wss://127.0.0.1:8000/ws/telephone/audio");
         if (!TextUtils.isEmpty(cookie)) {
             rb.addHeader("Cookie", cookie);
         }
         try {
-            webSocket = LocalhostTrustOkHttpClient.get()
-                .newWebSocket(
+            synchronized (this) {
+                if (sessionGeneration.get() != generation) {
+                    return;
+                }
+                running.set(true);
+                pipelinesReady.set(false);
+                microphoneFrameMs = 60;
+                webSocket = LocalhostTrustOkHttpClient.get()
+                    .newWebSocket(
                     rb.build(),
                     new WebSocketListener() {
                         @Override
                         public void onOpen(WebSocket w, Response r) {
+                            if (sessionGeneration.get() != generation) {
+                                w.close(1000, "stale session");
+                                return;
+                            }
                             w.send("{\"type\":\"attach\"}");
                         }
 
                         @Override
                         public void onMessage(WebSocket w, String t) {
-                            if (t == null) {
+                            if (sessionGeneration.get() != generation || t == null) {
                                 return;
                             }
                             try {
@@ -180,59 +296,134 @@ public final class TelephoneNativeAudioSession {
                                         || (msg.equals("error") && o.length() < 2)) {
                                         // keep generic
                                     }
-                                    postDispatch("error", "server", msg);
+                                    postDispatchForGeneration(generation, "error", "server", msg);
                                 } else if ("web_audio.ready".equals(o.optString("type"))) {
-                                    activity.runOnUiThread(TelephoneNativeAudioSession.this::onWebAudioReadyPipelines);
+                                    int ms = o.optInt("frame_ms", 60);
+                                    if (ms == 10 || ms == 20 || ms == 40 || ms == 60
+                                            || ms == 200 || ms == 320 || ms == 400) {
+                                        microphoneFrameMs = ms;
+                                    }
+                                    activity.runOnUiThread(() -> onWebAudioReadyPipelines(generation));
                                 }
                             } catch (Exception e) {
                                 if (t.contains("web_audio.ready") || t.contains("frame_ms")) {
-                                    activity.runOnUiThread(TelephoneNativeAudioSession.this::onWebAudioReadyPipelines);
+                                    activity.runOnUiThread(() -> onWebAudioReadyPipelines(generation));
                                 }
                             }
                         }
 
                         @Override
                         public void onMessage(WebSocket w, ByteString bytes) {
-                            playPcm(bytes);
+                            if (sessionGeneration.get() != generation) {
+                                return;
+                            }
+                            enqueuePlayback(bytes);
                         }
 
                         @Override
                         public void onFailure(WebSocket w, Throwable t, @Nullable Response r) {
-                            webSocket = null;
-                            running.set(false);
-                            pipelinesReady.set(false);
+                            synchronized (TelephoneNativeAudioSession.this) {
+                                if (sessionGeneration.get() != generation) {
+                                    return;
+                                }
+                                sessionGeneration.incrementAndGet();
+                                webSocket = null;
+                                running.set(false);
+                                pipelinesReady.set(false);
+                                postReleaseAfterStop(generation);
+                            }
                             String msg = t != null && t.getMessage() != null ? t.getMessage() : "connect_failed";
-                            postDispatch("error", "websocket", msg);
-                            postReleaseAfterStop();
+                            postDispatchForGeneration(generation, "error", "websocket", msg);
                         }
 
                         @Override
                         public void onClosed(WebSocket w, int c, @Nullable String r) {
-                            webSocket = null;
-                            running.set(false);
-                            pipelinesReady.set(false);
-                            postDispatch("closed", null, null);
-                            postReleaseAfterStop();
+                            synchronized (TelephoneNativeAudioSession.this) {
+                                if (sessionGeneration.get() != generation) {
+                                    return;
+                                }
+                                sessionGeneration.incrementAndGet();
+                                webSocket = null;
+                                running.set(false);
+                                pipelinesReady.set(false);
+                                postReleaseAfterStop(generation);
+                            }
+                            postDispatchForGeneration(generation, "closed", null, null);
                         }
                     }
                 );
+            }
         } catch (Exception e) {
-            running.set(false);
+            synchronized (this) {
+                if (sessionGeneration.get() != generation) {
+                    return;
+                }
+                sessionGeneration.incrementAndGet();
+                running.set(false);
+                pipelinesReady.set(false);
+                webSocket = null;
+                startCleanupWorkerLocked(generation);
+            }
             String m = e.getMessage() != null ? e.getMessage() : "okhttp";
-            postDispatch("error", "connect", m);
+            postDispatchForGeneration(generation, "error", "connect", m);
         }
     }
 
-    private void onWebAudioReadyPipelines() {
-        if (pipelinesReady.getAndSet(true)) {
-            return;
+    private void failAudioInitialization(
+            long generation, String reason, @Nullable String detail) {
+        final WebSocket socketToClose;
+
+        synchronized (this) {
+            if (sessionGeneration.get() != generation) {
+                return;
+            }
+
+            sessionGeneration.incrementAndGet();
+            running.set(false);
+            pipelinesReady.set(false);
+
+            socketToClose = webSocket;
+            webSocket = null;
+
+            startCleanupWorkerLocked(generation);
         }
-        if (!running.get()) {
-            return;
+
+        if (socketToClose != null) {
+            try {
+                socketToClose.close(1000, "audio setup failed");
+            } catch (Exception ignored) {
+            }
+        }
+
+        postDispatchForGeneration(generation, "error", reason, detail);
+    }
+
+    private boolean isCurrentAudioGeneration(long generation) {
+        synchronized (this) {
+            return sessionGeneration.get() == generation
+                && running.get()
+                && !cleanupInProgress;
+        }
+    }
+
+    private void onWebAudioReadyPipelines(long generation) {
+        synchronized (this) {
+            if (sessionGeneration.get() != generation
+                    || !running.get()
+                    || cleanupInProgress
+                    || initializationInProgress) {
+                return;
+            }
+            if (pipelinesReady.getAndSet(true)) {
+                return;
+            }
+            initializationInProgress = true;
         }
         try {
             if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                postDispatch("error", "no_record_audio_permission", null);
+                failAudioInitialization(
+                    generation, "no_record_audio_permission", null
+                );
                 return;
             }
             acquireCallAudioMode();
@@ -242,12 +433,13 @@ public final class TelephoneNativeAudioSession {
             );
             audioRecord = createVoiceAudioRecord(inBuf);
             if (audioRecord == null) {
-                postDispatch("error", "no_record_audio_permission", null);
+                failAudioInitialization(
+                    generation, "no_record_audio_permission", null
+                );
                 return;
             }
             if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
-                releaseTx();
-                postDispatch("error", "record_init", null);
+                failAudioInitialization(generation, "record_init", null);
                 return;
             }
             int outMin = AudioTrack.getMinBufferSize(SAMPLE_RATE, OUT_CHANNEL, FORMAT);
@@ -264,44 +456,88 @@ public final class TelephoneNativeAudioSession {
                 .setEncoding(FORMAT)
                 .setChannelMask(OUT_CHANNEL)
                 .build();
-            audioTrack = new AudioTrack.Builder()
-                .setAudioAttributes(playbackAttr)
-                .setAudioFormat(trackFmt)
-                .setBufferSizeInBytes(trackBuf)
-                .setTransferMode(AudioTrack.MODE_STREAM)
-                .build();
-            if (audioTrack.getState() != AudioTrack.STATE_INITIALIZED) {
-                releaseTx();
-                postDispatch("error", "track_init", null);
-                return;
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                try {
-                    audioTrack.setVolume(AudioTrack.getMaxVolume());
-                } catch (Exception ignored) {
+            synchronized (playbackLock) {
+                if (!running.get()) {
+                    return;
+                }
+                audioTrack = new AudioTrack.Builder()
+                    .setAudioAttributes(playbackAttr)
+                    .setAudioFormat(trackFmt)
+                    .setBufferSizeInBytes(trackBuf)
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+                    .build();
+                if (audioTrack.getState() == AudioTrack.STATE_INITIALIZED) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        try {
+                            audioTrack.setVolume(AudioTrack.getMaxVolume());
+                        } catch (Exception ignored) {
+                        }
+                    }
                 }
             }
+            boolean trackInitialized;
+            synchronized (playbackLock) {
+                trackInitialized = running.get()
+                    && audioTrack != null
+                    && audioTrack.getState() == AudioTrack.STATE_INITIALIZED;
+            }
+            if (!trackInitialized) {
+                if (running.get()) {
+                    failAudioInitialization(generation, "track_init", null);
+                }
+                return;
+            }
+            if (!isCurrentAudioGeneration(generation)) {
+                return;
+            }
+
             try {
                 audioRecord.startRecording();
             } catch (Exception e) {
-                releaseTx();
-                postDispatch("error", "record_start", e.getMessage() != null ? e.getMessage() : "");
+                failAudioInitialization(
+                    generation, "record_start",
+                    e.getMessage() != null ? e.getMessage() : ""
+                );
                 return;
             }
             try {
-                audioTrack.play();
+                synchronized (playbackLock) {
+                    if (!running.get() || audioTrack == null) {
+                        return;
+                    }
+                    audioTrack.play();
+                }
             } catch (Exception e) {
-                releaseTx();
-                postDispatch("error", "track_start", e.getMessage() != null ? e.getMessage() : "");
+                failAudioInitialization(
+                    generation, "track_start",
+                    e.getMessage() != null ? e.getMessage() : ""
+                );
                 return;
             }
-            sendThread = new Thread(this::drainMicrophone, "meshchatx-tel-mic");
-            sendThread.setPriority(Thread.NORM_PRIORITY);
-            sendThread.start();
-            postDispatch("ready", null, null);
+            synchronized (this) {
+                if (sessionGeneration.get() != generation
+                        || !running.get()
+                        || cleanupInProgress) {
+                    return;
+                }
+
+                startPlaybackWorker();
+                sendThread = new Thread(() -> drainMicrophone(generation), "meshchatx-tel-mic");
+                sendThread.setPriority(Thread.NORM_PRIORITY);
+                sendThread.start();
+            }
+
+            postReadyForGeneration(generation);
         } catch (Exception e) {
-            releaseTx();
-            postDispatch("error", "setup", e.getMessage() != null ? e.getMessage() : "setup");
+            failAudioInitialization(
+                generation, "setup",
+                e.getMessage() != null ? e.getMessage() : "setup"
+            );
+        } finally {
+            synchronized (this) {
+                initializationInProgress = false;
+                notifyAll();
+            }
         }
     }
 
@@ -319,8 +555,10 @@ public final class TelephoneNativeAudioSession {
         );
     }
 
-    private void drainMicrophone() {
+    private void drainMicrophone(long generation) {
         byte[] buf = new byte[4096];
+        PcmFrameAccumulator accumulator =
+            new PcmFrameAccumulator(SAMPLE_RATE, microphoneFrameMs);
         long lastLevelsMs = 0L;
         while (running.get() && webSocket != null) {
             AudioRecord ar;
@@ -340,7 +578,11 @@ public final class TelephoneNativeAudioSession {
             }
             if (n > 0 && w != null) {
                 try {
-                    w.send(ByteString.of(buf, 0, n));
+                    accumulator.append(buf, n, frame -> {
+                        if (running.get() && webSocket == w) {
+                            w.send(ByteString.of(frame));
+                        }
+                    });
                 } catch (Exception e) {
                     break;
                 }
@@ -348,7 +590,7 @@ public final class TelephoneNativeAudioSession {
                 if (now - lastLevelsMs >= 200L) {
                     lastLevelsMs = now;
                     float tx = pcmPeakLevel(buf, n);
-                    postLevels(tx, lastRxLevel);
+                    postLevels(generation, tx, lastRxLevel);
                 }
             } else if (n < 0) {
                 break;
@@ -357,47 +599,148 @@ public final class TelephoneNativeAudioSession {
     }
 
     private volatile float lastRxLevel = 0f;
+    private final Object playbackLock = new Object();
 
-    private void playPcm(ByteString bytes) {
-        if (bytes == null || bytes.size() == 0) {
+    private void stopPlaybackWorker(long generation) {
+        playbackQueue.clear();
+
+        Thread worker = playbackThread;
+        if (worker != null) {
+            worker.interrupt();
+
+            if (worker != Thread.currentThread()) {
+                boolean interrupted = false;
+                boolean timeoutReported = false;
+                final long warningDeadline =
+                    android.os.SystemClock.elapsedRealtime() + 5000L;
+
+                while (worker.isAlive()) {
+                    try {
+                        worker.join(500L);
+                    } catch (InterruptedException e) {
+                        interrupted = true;
+                    }
+
+                    if (!timeoutReported
+                            && worker.isAlive()
+                            && android.os.SystemClock.elapsedRealtime()
+                                >= warningDeadline) {
+                        timeoutReported = true;
+                        postDispatchForGeneration(
+                            generation,
+                            "error",
+                            "playback_shutdown_timeout",
+                            "Playback worker did not stop within five seconds"
+                        );
+                    }
+                }
+
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+
+            if (!worker.isAlive()) {
+                playbackThread = null;
+            }
+        }
+    }
+
+    private void startPlaybackWorker() {
+        if (playbackThread != null && playbackThread.isAlive()) {
             return;
         }
-        AudioTrack at;
-        synchronized (this) {
-            at = audioTrack;
-        }
-        if (at == null) {
+
+        final long generation = sessionGeneration.get();
+        playbackQueue.clear();
+
+        Thread worker = new Thread(() -> {
+            try {
+                while (sessionGeneration.get() == generation
+                        && running.get()) {
+                    ByteString packet;
+                    try {
+                        packet = playbackQueue.poll(
+                            100L, java.util.concurrent.TimeUnit.MILLISECONDS
+                        );
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+
+                    if (packet != null
+                            && sessionGeneration.get() == generation
+                            && running.get()) {
+                        playPcm(packet, generation);
+                    }
+                }
+            } finally {
+                if (sessionGeneration.get() == generation) {
+                    playbackQueue.clear();
+                }
+            }
+        }, "meshchatx-tel-playback");
+
+        playbackThread = worker;
+        worker.start();
+    }
+
+    private void enqueuePlayback(ByteString bytes) {
+        if (bytes == null || bytes.size() == 0 || !running.get()) {
             return;
         }
+
+        if (!playbackQueue.offer(bytes)) {
+            // Drop the oldest waiting audio instead of increasing latency.
+            playbackQueue.poll();
+            playbackQueue.offer(bytes);
+        }
+    }
+
+    private void playPcm(ByteString bytes, long generation) {
+        if (bytes == null || bytes.size() == 0
+                || !isCurrentAudioGeneration(generation)) {
+            return;
+        }
+
         byte[] raw = bytes.toByteArray();
         lastRxLevel = pcmPeakLevel(raw, raw.length);
-        int off = 0;
-        int left = raw.length;
-        while (left > 0) {
-            if (!running.get()) {
-                return;
+
+        int offset = 0;
+        while (offset < raw.length
+                && isCurrentAudioGeneration(generation)) {
+            int written;
+            synchronized (playbackLock) {
+                if (sessionGeneration.get() != generation
+                        || !running.get()
+                        || audioTrack == null) {
+                    return;
+                }
+                try {
+                    written = audioTrack.write(
+                        raw,
+                        offset,
+                        raw.length - offset,
+                        AudioTrack.WRITE_NON_BLOCKING
+                    );
+                } catch (IllegalStateException e) {
+                    return;
+                }
             }
-            synchronized (this) {
-                at = audioTrack;
-            }
-            if (at == null) {
-                return;
-            }
-            int written = 0;
-            try {
-                written = at.write(raw, off, left);
-            } catch (Exception e) {
-                return;
-            }
+
             if (written < 0) {
                 return;
             }
             if (written == 0) {
-                Thread.yield();
+                try {
+                    Thread.sleep(2L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
                 continue;
             }
-            off += written;
-            left -= written;
+            offset += written;
         }
     }
 
@@ -420,11 +763,16 @@ public final class TelephoneNativeAudioSession {
         return Math.min(1f, peak / 32767f);
     }
 
-    private void postLevels(float tx, float rx) {
-        activity.runOnUiThread(() -> dispatchLevels(tx, rx));
+    private void postLevels(long generation, float tx, float rx) {
+        activity.runOnUiThread(() -> {
+            if (!isCurrentAudioGeneration(generation)) {
+                return;
+            }
+            dispatchLevels(generation, tx, rx);
+        });
     }
 
-    private void dispatchLevels(float tx, float rx) {
+    private void dispatchLevels(long generation, float tx, float rx) {
         try {
             WebView wv = activity.getWebViewForNativeBridge();
             if (wv == null) {
@@ -433,6 +781,7 @@ public final class TelephoneNativeAudioSession {
             JSONObject o = new JSONObject();
             o.put("type", "meshchatx-native-telephone-audio");
             o.put("kind", "levels");
+            o.put("generation", generation);
             o.put("tx_level", tx);
             o.put("rx_level", rx);
             String j = o.toString();
@@ -445,11 +794,35 @@ public final class TelephoneNativeAudioSession {
         }
     }
 
-    private void postDispatch(String a, @Nullable String b, @Nullable String c) {
-        activity.runOnUiThread(() -> dispatchToPage(a, b, c));
+    private void postReadyForGeneration(long generation) {
+        activity.runOnUiThread(() -> {
+            if (!isCurrentAudioGeneration(generation)) {
+                return;
+            }
+            dispatchToPage(generation, "ready", null, null);
+        });
     }
 
-    private void dispatchToPage(String kind, @Nullable String sub, @Nullable String detail) {
+    private void postDispatch(String a, @Nullable String b, @Nullable String c) {
+        final long generation = sessionGeneration.get();
+        postDispatchForGeneration(generation, a, b, c);
+    }
+
+    private void postDispatchForGeneration(
+            long generation,
+            String kind,
+            @Nullable String sub,
+            @Nullable String detail) {
+        activity.runOnUiThread(
+            () -> dispatchToPage(generation, kind, sub, detail)
+        );
+    }
+
+    private void dispatchToPage(
+            long generation,
+            String kind,
+            @Nullable String sub,
+            @Nullable String detail) {
         try {
             WebView wv = activity.getWebViewForNativeBridge();
             if (wv == null) {
@@ -458,6 +831,7 @@ public final class TelephoneNativeAudioSession {
             JSONObject o = new JSONObject();
             o.put("type", "meshchatx-native-telephone-audio");
             o.put("kind", kind);
+            o.put("generation", generation);
             if (sub != null) {
                 o.put("sub", sub);
             }
@@ -504,9 +878,15 @@ public final class TelephoneNativeAudioSession {
             }
         } catch (Exception ignored) {
         }
+        bluetoothRoute = new TelephoneBluetoothRoute(audioManager);
+        bluetoothRoute.start();
     }
 
     private void releaseCallAudioMode() {
+        if (bluetoothRoute != null) {
+            bluetoothRoute.stop();
+            bluetoothRoute = null;
+        }
         if (audioManager == null) {
             return;
         }
@@ -526,7 +906,29 @@ public final class TelephoneNativeAudioSession {
         audioManager = null;
     }
 
-    private void releaseTx() {
+    private void stopMicrophoneCapture() {
+        final AudioRecord recorder;
+
+        synchronized (this) {
+            recorder = audioRecord;
+        }
+
+        if (recorder == null) {
+            return;
+        }
+
+        try {
+            if (recorder.getRecordingState()
+                    == AudioRecord.RECORDSTATE_RECORDING) {
+                recorder.stop();
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void releaseTx(long generation) {
+        stopPlaybackWorker(generation);
+
         if (audioRecord != null) {
             try {
                 if (audioRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
@@ -540,23 +942,27 @@ public final class TelephoneNativeAudioSession {
             }
             audioRecord = null;
         }
-        if (audioTrack != null) {
-            try {
-                if (audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
-                    audioTrack.stop();
-                }
-            } catch (Exception ignored) {
-            }
-            try {
-                audioTrack.release();
-            } catch (Exception ignored) {
-            }
+        synchronized (playbackLock) {
+            AudioTrack track = audioTrack;
             audioTrack = null;
+
+            if (track != null) {
+                try {
+                    if (track.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
+                        track.stop();
+                    }
+                } catch (Exception ignored) {
+                }
+                try {
+                    track.release();
+                } catch (Exception ignored) {
+                }
+            }
         }
         releaseCallAudioMode();
     }
 
-    private void releaseAudio() {
-        releaseTx();
+    private void releaseAudio(long generation) {
+        releaseTx(generation);
     }
 }
