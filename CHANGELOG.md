@@ -1029,7 +1029,6 @@ Release validation and signing/migration requirements are recorded in `android/r
 - **Announce limits**: Default announce_max_stored_* raised from 1000 to 2500 and announce_fetch_limit_* from 500 to 2500 so the API lists everything stored in the database by default, matching public network usage.
 - **Sidebar order**: Reordered sidebar so Telephone appears directly below Messages for faster access.
 - **Telephone announce**: Disabled by default in config_manager.
-- **CONTRIBUTING.md**: Updated generative AI policy to emphasize local/offline models and reference the Reticulum Zen and License.
 - **Dependencies**: Migrated Python dependency management from Poetry to UV (0.11.12) across all CI scripts, Dockerfiles, and dev tooling. poetry.lock replaced with uv.lock.
 
 ## [4.6.1] - 2026-05-04
@@ -1521,7 +1520,6 @@ Release validation and signing/migration requirements are recorded in `android/r
 
 ### Developer / Docs
 
-- CONTRIBUTING and CONTRIBUTORS added for contribution guidelines and credits.
 - Makefile added for common build/run targets.
 - README updates.
 
