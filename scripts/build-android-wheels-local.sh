@@ -917,6 +917,17 @@ PY
 fi
 
 if [[ -z "${ONLY_RECIPES}" ]]; then
+    # PyPI publishes usbserial4a 0.4.0 as source only. Chaquopy installs
+    # Android dependencies from wheels, so prepare its pure-Python wheel here.
+    USB_REQUIREMENTS="${WORK_DIR}/usbserial4a-requirements.txt"
+    printf '%s\n' 'usbserial4a==0.4.0 --hash=sha256:0777e9cc0bad0d8fccc27f64af3e849062765e0c5059d78ef90cffa825413178' > "${USB_REQUIREMENTS}"
+    "${VENV_DIR}/bin/pip" wheel --no-deps --no-build-isolation --require-hashes \
+        --wheel-dir "${OUT_DIR}" --requirement "${USB_REQUIREMENTS}"
+    "${VENV_DIR}/bin/pip" download --only-binary=:all: --no-deps \
+        --dest "${OUT_DIR}" "usb4a==0.3.0"
+fi
+
+if [[ -z "${ONLY_RECIPES}" ]]; then
     echo "Fetching bleak ${BLEAK_VERSION} pure-python wheel"
     BLEAK_TMP_DIR="$(mktemp -d)"
 
