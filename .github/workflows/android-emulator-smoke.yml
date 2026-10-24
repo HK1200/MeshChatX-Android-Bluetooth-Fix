@@ -64,6 +64,7 @@ env:
         ftp.osuosl.org:443
         dl.google.com:443
         maven.google.com:443
+        jitpack.io:443
         repo.maven.apache.org:443
         services.gradle.org:443
         repo.gradle.org:443

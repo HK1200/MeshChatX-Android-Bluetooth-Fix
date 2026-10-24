@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -12,6 +13,13 @@ from meshchatx.src.update_rsm import verify_rsm
 
 SIGNER = bytes.fromhex('4d3aaedcc9aab76c61353deed5adfb8c')
 CERTIFICATE = 'e8e1b72b66d882048d8b712fb4fab5983417e55c359f123d8dcdd845bacf667e'
+
+
+def certificate_matches(output):
+    # New build-tools can label signers by SDK range instead of "Signer #1".
+    # Compare every reported certificate fingerprint, independent of that label.
+    digests = re.findall(r"certificate SHA-256 digest:\s*([0-9a-fA-F:]+)", output, re.IGNORECASE)
+    return {digest.replace(":", "").lower() for digest in digests} == {CERTIFICATE}
 
 
 def main():
@@ -38,7 +46,7 @@ def main():
             raise SystemExit(f'Checksum or size mismatch: {name}')
         if artifact['kind'] == 'apk':
             output = subprocess.check_output([args.apksigner, 'verify', '--verbose', '--print-certs', str(path)], text=True)
-            if f'Signer #1 certificate SHA-256 digest: {CERTIFICATE}' not in output:
+            if not certificate_matches(output):
                 raise SystemExit(f'Unexpected APK signing certificate: {name}')
     print(f"Verified {args.tag}: {len(apk_names)} APK(s), pinned update signer, checksums and permanent APK certificate.")
 
