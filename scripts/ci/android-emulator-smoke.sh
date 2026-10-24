@@ -5,8 +5,8 @@
 # Expects: adb on PATH, one device/emulator online, APK path as $1 or MESHCHATX_APK.
 set -euo pipefail
 
-PACKAGE="${MESHCHATX_ANDROID_PACKAGE:-com.meshchatx}"
-ACTIVITY="${MESHCHATX_ANDROID_ACTIVITY:-com.meshchatx/.MainActivity}"
+PACKAGE="${MESHCHATX_ANDROID_PACKAGE:-com.haadkoe.meshchatx}"
+ACTIVITY="${MESHCHATX_ANDROID_ACTIVITY:-${PACKAGE}/com.meshchatx.MainActivity}"
 STATUS_PATH="${MESHCHATX_SMOKE_STATUS_PATH:-/api/v1/status}"
 TIMEOUT_SEC="${MESHCHATX_SMOKE_TIMEOUT_SEC:-180}"
 LOGCAT_TAG_FILTER="${MESHCHATX_SMOKE_LOGCAT_FILTER:-Python|meshchat|MeshChat|chaquo|AndroidRuntime}"
