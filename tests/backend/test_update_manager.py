@@ -26,6 +26,13 @@ from meshchatx.src.backend.update_manager import (
 from meshchatx.src.update_rsm import sign_manifest, verify_rsm
 
 
+@pytest.fixture(autouse=True)
+def isolated_update_endpoint(monkeypatch):
+    # Most tests inject signed CDN responses. GitHub discovery is tested
+    # separately below without this override.
+    monkeypatch.setenv("MESHCHATX_UPDATE_BASE_URL", "https://updates.example.test")
+
+
 @pytest.fixture
 def signer():
     return _REAL_IDENTITY()
@@ -334,16 +341,18 @@ def test_routes_register(mock_app):
 
 @pytest.mark.asyncio
 async def test_route_status_shape(mock_app):
+    mock_app.update_manager.channel = "local"
     handler = _route(mock_app, "GET", "/api/v1/update/status")
     resp = await handler(MagicMock())
     assert resp.status == 200
     body = json.loads(resp.body)
-    assert body["enabled"] is False  # mock_app builds with channel local
+    assert body["enabled"] is False
     assert body["current_version"]
 
 
 @pytest.mark.asyncio
 async def test_route_check_disabled(mock_app):
+    mock_app.update_manager.channel = "local"
     handler = _route(mock_app, "POST", "/api/v1/update/check")
     resp = await handler(MagicMock())
     assert resp.status == 200
@@ -458,3 +467,100 @@ async def test_route_apply_file_rejects_unknown_file(
     req = _MultipartRequest([_MultipartField("file", [b"totally-unknown-bytes"])])
     resp = await handler(req)
     assert resp.status == 422
+
+
+def test_hk_feed_and_artifact_paths(monkeypatch, tmp_path):
+    monkeypatch.delenv("MESHCHATX_UPDATE_BASE_URL", raising=False)
+    manager = UpdateManager(
+        str(tmp_path), current_version="4.10.7+hk.1.0.1", channel="stable"
+    )
+    assert (
+        manager.manifest_url()
+        == "https://github.com/HK1200/MeshChatX-HK/releases/latest/download/latest.rsm"
+    )
+    assert (
+        manager.artifact_url(
+            {"tag": "4.10.7-HK-1.0.2"}, {"file": "MeshChatX-HK-android-arm64.apk"}
+        )
+        == "https://github.com/HK1200/MeshChatX-HK/releases/download/4.10.7-HK-1.0.2/MeshChatX-HK-android-arm64.apk"
+    )
+
+
+def test_custom_cdn_override_keeps_existing_layout(monkeypatch, tmp_path):
+    monkeypatch.setenv("MESHCHATX_UPDATE_BASE_URL", "https://updates.example.test")
+    manager = UpdateManager(str(tmp_path), current_version="1.0.0", channel="beta")
+    assert manager.manifest_url() == "https://updates.example.test/beta/latest.rsm"
+    assert (
+        manager.artifact_url({"tag": "v2"}, {"file": "app.apk"})
+        == "https://updates.example.test/beta/v2/app.apk"
+    )
+
+
+def test_hk_local_versions_compare_correctly():
+    assert _version_newer("4.10.7+hk.1.0.2", "4.10.7+hk.1.0.1")
+    assert not _version_newer("4.10.7+hk.1.0.1", "4.10.7+hk.1.0.2")
+
+
+@pytest.mark.asyncio
+async def test_verified_update_can_be_saved_on_android(mock_app, tmp_path):
+    payload = b"signed apk test bytes"
+    source = tmp_path / "download.apk"
+    source.write_bytes(payload)
+    manager = UpdateManager(str(tmp_path), current_version="1.0.0", channel="stable")
+    mock_app.update_manager = manager
+    manager.stage(
+        source,
+        {
+            "file": "app.apk",
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "size": len(payload),
+            "kind": "apk",
+            "platform": "android",
+            "arch": "aarch64",
+        },
+        _manifest(),
+    )
+    response = await _route(mock_app, "GET", "/api/v1/update/payload")(MagicMock())
+    assert response.status == 200
+    assert (
+        response.headers["Content-Disposition"]
+        == "attachment; filename*=UTF-8''app.apk"
+    )
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+@pytest.mark.asyncio
+async def test_saved_update_rechecks_checksum(mock_app, tmp_path):
+    payload = b"verified"
+    source = tmp_path / "download.apk"
+    source.write_bytes(payload)
+    manager = UpdateManager(str(tmp_path), current_version="1.0.0", channel="stable")
+    mock_app.update_manager = manager
+    manager.stage(
+        source,
+        {
+            "file": "app.apk",
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "size": len(payload),
+            "kind": "apk",
+            "platform": "android",
+            "arch": "aarch64",
+        },
+        _manifest(),
+    )
+    (manager.pending_dir / "app.apk").write_bytes(b"tampered")
+    response = await _route(mock_app, "GET", "/api/v1/update/payload")(MagicMock())
+    assert response.status == 404
+
+
+@pytest.mark.parametrize("channel,tag", [("beta", "beta-4.11.0"), ("testing", "nightly-20261024")])
+def test_prerelease_manifest_uses_matching_application_release(tmp_path, monkeypatch, channel, tag):
+    monkeypatch.delenv("MESHCHATX_UPDATE_BASE_URL", raising=False)
+    manager = UpdateManager(str(tmp_path), current_version="1.0.0", channel=channel)
+    releases = [
+        {"tag_name": "4.10.7-HK-1.0.2", "prerelease": False},
+        {"tag_name": tag, "prerelease": True, "draft": True},
+        {"tag_name": tag, "prerelease": True, "draft": False},
+    ]
+    monkeypatch.setattr(manager, "_fetch_bytes", lambda *args: json.dumps(releases).encode())
+    assert manager.manifest_url() == f"https://github.com/HK1200/MeshChatX-HK/releases/download/{tag}/latest.rsm"

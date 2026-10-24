@@ -4,10 +4,10 @@
 # Pinned first-party actions (bump tag and SHA together when upgrading):
 #   actions/checkout@v6.0.1            8e8c483db84b4bee98b60c0593521ed34d9990e8
 #   actions/setup-python@v6.2.0        a309ff8b426b58ec0e2a45f0f869d46889d02405
-#   actions/setup-java@v4.7.1          c5195efecf7bdfc987ee8bae7a71cb8b11521c00
-#   actions/upload-artifact@v5.0.0     330a01c490aca151604b8cf639adc76d48f6c5d4
-#   actions/download-artifact@v5.0.0   634f93cb2916e3fdff6788551b99b062d0335ce0
-#   actions/cache@v4.2.0               1bd1e32a3bdc45362d1e726936510720a7c30a57
+#   actions/setup-java@v6.1.0 b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+#   actions/upload-artifact@v7.0.2 cf430e030ddbb5b0abf93d22962f4752f3646cd9
+#   actions/download-artifact@v8.0.2 9000827ccba6bdab643e8b6fd33ac0654aef8333
+#   actions/cache@v6.1.0 55cc8345863c7cc4c66a329aec7e433d2d1c52a9
 
 name: Android build
 
@@ -121,7 +121,7 @@ env:
 jobs:
     frontend:
         name: Build frontend artifact
-        uses: $/.github/workflows/frontend-build.yml
+        uses: ./.github/workflows/frontend-build.yml
         permissions:
             contents: read
         with:
@@ -145,7 +145,7 @@ jobs:
             FRONTEND_ARTIFACT_NAME: ${{ needs.frontend.outputs.artifact_name }}
         steps:
             - name: Harden runner
-              uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+              uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
               with:
                   egress-policy: ${{ runner.os == 'Linux' && 'block' || 'audit' }}
                   allowed-endpoints: ${{ env.HARDEN_ENDPOINTS }}
@@ -160,9 +160,10 @@ jobs:
               if: github.ref_type == 'tag'
               run: |
                   set -euo pipefail
-                  git fetch --no-tags origin master
+                  default_branch="${{ github.event.repository.default_branch }}"
+                  git fetch --no-tags origin "${default_branch}"
                   sha="$(git rev-parse HEAD)"
-                  if git branch -r --contains "${sha}" | grep -Eq '(^|[[:space:]])origin/master[[:space:]]*$'; then
+                  if git merge-base --is-ancestor "${sha}" "FETCH_HEAD"; then
                     track=master
                   else
                     track=none
@@ -191,7 +192,7 @@ jobs:
                   exit 1
 
             - name: Set up Java
-              uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00
+              uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
               with:
                   distribution: temurin
                   java-version: ${{ env.JAVA_VERSION }}
@@ -207,7 +208,7 @@ jobs:
                   python-version: ${{ env.PYTHON_VERSION }}
 
             - name: Download frontend artifact
-              uses: $/.github/actions/fetch-frontend-artifact
+              uses: ./.github/actions/fetch-frontend-artifact
               with:
                   artifact-name: ${{ env.FRONTEND_ARTIFACT_NAME }}
 
@@ -217,7 +218,7 @@ jobs:
                   sudo apt-get install -y build-essential cmake pkg-config patchelf
 
             - name: Cache Cargo registry
-              uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
               with:
                   path: |
                       ~/.cargo/registry
@@ -227,7 +228,7 @@ jobs:
                       android-cargo-
 
             - name: Cache Chaquopy wheel workdir
-              uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
               with:
                   path: .local/chaquopy-build-wheel
                   key: chaquopy-work-${{ hashFiles('uv.lock', 'android/**/*.gradle', 'scripts/build-android-wheels-local.sh') }}-${{ env.CHAQUOPY_REF }}
@@ -260,7 +261,10 @@ jobs:
                   } >> "${GITHUB_ENV}"
 
             - name: Provision missing Android Opus libraries
-              run: python3 scripts/android/provision-opus.py
+              run: |
+                  python3 scripts/android/provision-opus.py
+                  python3 scripts/android/provision-ogg.py
+                  python3 scripts/android/provision-opusfile.py
 
             - name: Build Android wheels
               run: bash scripts/build-android-wheels-local.sh --python-minor "${PYTHON_VERSION}" --chaquopy-ref "${CHAQUOPY_REF}" --abis arm64-v8a,x86_64,armeabi-v7a
@@ -386,7 +390,7 @@ jobs:
                   bash scripts/sign-android-apks.sh
 
             - name: Upload wheels
-              uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
               with:
                   name: android-wheels-${{ github.ref_name }}-${{ github.run_id }}
                   path: android/vendor/*.whl
@@ -394,7 +398,7 @@ jobs:
 
             - name: Upload debug APK
               if: ${{ github.ref_type != 'tag' || steps.track.outputs.track != 'master' }}
-              uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
               with:
                   name: meshchatx-android-debug-${{ github.ref_name }}-${{ github.run_id }}
                   path: android/app/build/outputs/apk/debug/*.apk
@@ -402,7 +406,7 @@ jobs:
 
             - name: Upload test reports
               if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_tests }}
-              uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
               with:
                   name: meshchatx-android-tests-${{ github.ref_name }}-${{ github.run_id }}
                   path: |
@@ -414,7 +418,7 @@ jobs:
 
             - name: Upload release APK
               if: ${{ (github.ref_type == 'tag' && steps.track.outputs.track == 'master') || (github.ref_type != 'tag' && (github.event_name != 'workflow_dispatch' || inputs.build_release)) }}
-              uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
               with:
                   name: meshchatx-android-release-${{ github.ref_name }}-${{ github.run_id }}
                   path: android/app/build/outputs/apk/release/*.apk

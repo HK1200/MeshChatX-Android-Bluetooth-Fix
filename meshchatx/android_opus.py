@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: 0BSD
-"""Make the packaged Android Opus library discoverable to LXST PyOgg."""
+"""Make the packaged Android Opus, Ogg and OpusFile libraries discoverable to LXST PyOgg."""
 
 from __future__ import annotations
 
@@ -28,11 +28,11 @@ class _OpusLoader(importlib.abc.Loader):
 
         original_load = module.Library.load
 
-        def load(names, paths=None, tests=[]):
-            if names.get("external") == "opus":
+        def load(names, paths=None, tests=()):
+            if names.get("external") in ("opus", "ogg", "opusfile"):
                 native_dir = os.environ.get("MESHCHAT_NATIVE_LIB_DIR")
                 if native_dir:
-                    path = Path(native_dir) / "libopus.so"
+                    path = Path(native_dir) / f"lib{names['external']}.so"
                     if path.is_file():
                         try:
                             lib = ctypes.CDLL(str(path))
@@ -60,7 +60,7 @@ class _OpusFinder(importlib.abc.MetaPathFinder):
 
 
 def ensure_android_opus() -> bool:
-    """Install the Android-only PyOgg Opus discovery hook."""
+    """Install the Android-only PyOgg audio-library discovery hook."""
     global _installed
 
     if _installed:

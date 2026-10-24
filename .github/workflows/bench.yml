@@ -5,7 +5,7 @@
 #
 # Pinned first-party actions (bump tag and SHA together when upgrading):
 #   actions/checkout@v6.0.1            8e8c483db84b4bee98b60c0593521ed34d9990e8
-#   actions/cache@v5.0.4               668228422ae6a00e4ad889ee87cd7109ec5666a7
+#   actions/cache@v6.1.0 55cc8345863c7cc4c66a329aec7e433d2d1c52a9
 #   benchmark-action/github-action-benchmark@v1.22.0
 #                                      a60cea5bc7b49e15c1f58f411161f99e0df48372
 
@@ -106,7 +106,7 @@ jobs:
             pull-requests: write
         steps:
             - name: Harden runner
-              uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+              uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
               with:
                   egress-policy: ${{ runner.os == 'Linux' && 'block' || 'audit' }}
                   allowed-endpoints: ${{ env.HARDEN_ENDPOINTS }}
@@ -116,14 +116,14 @@ jobs:
                   persist-credentials: false
 
             - name: Set up development environment
-              uses: $/.github/actions/setup-dev-environment
+              uses: ./.github/actions/setup-dev-environment
               with:
                   python-version: ${{ env.PYTHON_VERSION }}
                   uv-version: ${{ env.UV_VERSION }}
                   install-node: "false"
 
             - name: Restore benchmark baseline cache
-              uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
               with:
                   path: ./cache
                   key: ${{ runner.os }}-bench-baseline-v2-${{ github.ref_name }}

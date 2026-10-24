@@ -5,7 +5,9 @@ Update flow:
 
   1. The release pipeline signs update.json into update.rsm (rnid-format
      RSG envelope) and uploads it to "<base>/<track>/latest.rsm" plus the
-     per-tag directory on the CDN.
+     versioned release. HK stable uses the latest application release;
+     prerelease channels resolve their matching release through GitHub.
+     Custom CDN overrides keep the original layout.
   2. UpdateManager.check fetches latest.rsm, verifies the embedded
      signature against a pinned release-identity hash, compares versions and
      returns the artifacts matching this platform/arch.
@@ -43,8 +45,8 @@ from meshchatx.src.env_utils import env_bool, env_str
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BASE_URL = "https://cdn.quad4.io"
-DEFAULT_SIGNER_HASH = "e46112d44649266d71fe2193e00a4710"
+DEFAULT_BASE_URL = "https://github.com/HK1200/MeshChatX-HK/releases/download"
+DEFAULT_SIGNER_HASH = "4d3aaedcc9aab76c61353deed5adfb8c"
 MANIFEST_NAME = "latest.rsm"
 MANIFEST_MAX_BYTES = 256 * 1024
 # Upper bound on a single artifact download. AppImage/whl are well under this.
@@ -182,7 +184,24 @@ class UpdateManager:
     # -- manifest ---------------------------------------------------------
 
     def manifest_url(self) -> str:
-        return f"{_base_url()}/{self.track}/{MANIFEST_NAME}"
+        if env_str("MESHCHATX_UPDATE_BASE_URL"):
+            return f"{_base_url()}/{self.track}/{MANIFEST_NAME}"
+        if self.channel == "stable":
+            return "https://github.com/HK1200/MeshChatX-HK/releases/latest/download/latest.rsm"
+        # GitHub's latest endpoint excludes prereleases. Select the newest
+        # published release for this channel instead of maintaining feed tags.
+        raw = self._fetch_bytes(
+            "https://api.github.com/repos/HK1200/MeshChatX-HK/releases?per_page=30",
+            1024 * 1024,
+        )
+        prefixes = ("beta-",) if self.channel == "beta" else ("nightly-", "testing-")
+        for release in json.loads(raw):
+            tag = release.get("tag_name", "")
+            if release.get("draft") or not release.get("prerelease"):
+                continue
+            if tag.startswith(prefixes) and "/" not in tag and "\\" not in tag and ".." not in tag:
+                return f"{_base_url()}/{tag}/{MANIFEST_NAME}"
+        raise UpdateUnavailable("no update manifest published for this channel")
 
     def _fetch_bytes(self, url: str, max_bytes: int, timeout: int = 20) -> bytes:
         if not url.startswith("https://"):
@@ -304,7 +323,9 @@ class UpdateManager:
         rel = _safe_artifact_relpath(entry["file"])
         if rel is None:
             raise UpdateError("unsafe artifact path in manifest")
-        return f"{_base_url()}/{self.track}/{manifest['tag']}/{rel}"
+        if env_str("MESHCHATX_UPDATE_BASE_URL"):
+            return f"{_base_url()}/{self.track}/{manifest['tag']}/{rel}"
+        return f"{_base_url()}/{manifest['tag']}/{rel}"
 
     def _verify_file(self, path: Path, entry: dict) -> None:
         size = path.stat().st_size

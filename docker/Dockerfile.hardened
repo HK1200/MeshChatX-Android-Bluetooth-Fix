@@ -10,12 +10,13 @@ ARG PYTHON_BUILD_HASH=sha256:85c70fe9ec4313b5c8b1adcb4f0e7fa45d171ae203d2c64c69c
 ARG PYTHON_RUNTIME_IMAGE=cgr.dev/chainguard/python:latest-dev
 ARG PYTHON_RUNTIME_HASH=sha256:85c70fe9ec4313b5c8b1adcb4f0e7fa45d171ae203d2c64c69c4ea3eb96fb7dc
 
-FROM --platform=linux/amd64 ${NODE_IMAGE}@${NODE_HASH} AS build-frontend
+FROM --platform=$BUILDPLATFORM ${NODE_IMAGE}@${NODE_HASH} AS build-frontend
 USER root
 WORKDIR /src
 ARG TINYGO_VERSION=0.42.0
+ARG BUILDARCH
 RUN apk add --no-cache git python3 go \
-    && wget -qO /tmp/tinygo.tar.gz "https://github.com/tinygo-org/tinygo/releases/download/v${TINYGO_VERSION}/tinygo${TINYGO_VERSION}.linux-amd64.tar.gz" \
+    && wget -qO /tmp/tinygo.tar.gz "https://github.com/tinygo-org/tinygo/releases/download/v${TINYGO_VERSION}/tinygo${TINYGO_VERSION}.linux-${BUILDARCH}.tar.gz" \
     && tar -C /usr/local -xzf /tmp/tinygo.tar.gz \
     && rm /tmp/tinygo.tar.gz \
     && /usr/local/tinygo/bin/tinygo version

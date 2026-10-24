@@ -11,6 +11,7 @@ if [ "$#" -lt 1 ]; then
 fi
 
 REQUIRED_CLASSES=(
+    "com/meshchatx/VoicemailTextToSpeech"
     "org/meshchatx/locallink/LocalLink"
     "org/meshchatx/locallink/PythonLocalLink"
     "org/meshchatx/locallink/AwareSession"

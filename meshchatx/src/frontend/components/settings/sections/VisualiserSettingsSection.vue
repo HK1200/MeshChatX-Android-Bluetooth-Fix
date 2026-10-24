@@ -107,6 +107,7 @@ export default {
             return [
                 { value: "flat", icon: "earth", label: "visualiser.view_mode_flat_full" },
                 { value: "planet", icon: "orbit", label: "visualiser.view_mode_planet_full" },
+                { value: "radial", icon: "radar", label: "visualiser.view_mode_radial_full" },
             ];
         },
     },

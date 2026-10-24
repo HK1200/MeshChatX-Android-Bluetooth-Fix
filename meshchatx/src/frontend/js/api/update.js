@@ -28,3 +28,8 @@ export function getPendingUpdate(...rest) {
 export function discardUpdate(...rest) {
     return window.api.post(apiPath("/update/discard"), {}, ...rest);
 }
+
+/** Download only the staged payload whose checksum still matches. */
+export function pendingUpdateDownloadUrl() {
+    return apiPath("/update/payload");
+}

@@ -6,10 +6,13 @@ import platform
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
 import RNS
+
+from meshchatx import android_tts
 
 from . import audio_codec
 
@@ -74,13 +77,16 @@ class VoicemailManager:
         # stabilization delay for voicemail greeting
         self.STABILIZATION_DELAY = 1.0
 
+        self._tts_status_cache = None
+        self._tts_status_checked_at = 0.0
+        self._greeting_generation_lock = threading.Lock()
         self.espeak_path = self._find_espeak()
         self.has_espeak = self.espeak_path is not None
 
         if self.has_espeak:
             RNS.log(f"Voicemail: Found eSpeak at {self.espeak_path}", RNS.LOG_DEBUG)
         else:
-            RNS.log("Voicemail: eSpeak not found", RNS.LOG_ERROR)
+            RNS.log("Voicemail: desktop eSpeak is unavailable", RNS.LOG_DEBUG)
 
     def get_name_for_identity_hash(self, identity_hash):
         """Default implementation, should be patched by ReticulumMeshChat."""
@@ -135,7 +141,47 @@ class VoicemailManager:
 
         return None
 
+    def get_tts_status(self):
+        """Probe Android speech on a worker thread; retain desktop compatibility."""
+        if android_tts._is_chaquopy_android():
+            now = time.monotonic()
+            if self._tts_status_cache is None or now - self._tts_status_checked_at > 15:
+                try:
+                    available = android_tts.available()
+                except Exception:
+                    available = False
+                self._tts_status_cache = {
+                    "has_tts": available,
+                    "tts_provider": "android",
+                    "tts_supports_word_gap": False,
+                }
+                self._tts_status_checked_at = now
+            return dict(self._tts_status_cache)
+        return {
+            "has_tts": self.has_espeak,
+            "tts_provider": "espeak",
+            "tts_supports_word_gap": True,
+        }
+
     def generate_greeting(self, text):
+        with self._greeting_generation_lock:
+            return self._generate_greeting(text)
+
+    def _generate_greeting(self, text):
+        if android_tts._is_chaquopy_android():
+            wav_path = os.path.join(self.greetings_dir, "greeting.wav")
+            try:
+                android_tts.synthesize(
+                    text,
+                    wav_path,
+                    voice=self.config.voicemail_tts_voice.get(),
+                    speed=self.config.voicemail_tts_speed.get(),
+                    pitch=self.config.voicemail_tts_pitch.get(),
+                )
+                return self.convert_to_greeting(wav_path)
+            finally:
+                if os.path.exists(wav_path):
+                    os.remove(wav_path)
         if not self.has_espeak:
             msg = "espeak-ng is required for greeting generation"
             raise RuntimeError(msg)
@@ -183,8 +229,17 @@ class VoicemailManager:
         Any miniaudio-supported format is accepted. Output uses LXST's voice profile.
         """
         opus_path = os.path.join(self.greetings_dir, "greeting.opus")
-        audio_codec.encode_audio_to_ogg_opus(input_path, opus_path)
-        return opus_path
+        fd, temporary = tempfile.mkstemp(
+            prefix=".greeting-", suffix=".opus", dir=self.greetings_dir
+        )
+        os.close(fd)
+        try:
+            audio_codec.encode_audio_to_ogg_opus(input_path, temporary)
+            os.replace(temporary, opus_path)
+            return opus_path
+        finally:
+            if os.path.exists(temporary):
+                os.remove(temporary)
 
     def remove_greeting(self):
         opus_path = os.path.join(self.greetings_dir, "greeting.opus")
@@ -326,20 +381,6 @@ class VoicemailManager:
                 telephone.audio_input.stop()
 
         greeting_path = os.path.join(self.greetings_dir, "greeting.opus")
-        if not os.path.exists(greeting_path):
-            if self.has_espeak:
-                try:
-                    self.generate_greeting(self.config.voicemail_greeting.get())
-                except Exception as e:
-                    RNS.log(
-                        f"Voicemail: Could not generate initial greeting: {e}",
-                        RNS.LOG_ERROR,
-                    )
-            else:
-                RNS.log(
-                    "Voicemail: espeak-ng missing, cannot generate greeting",
-                    RNS.LOG_WARNING,
-                )
 
         def session_job():
             LXST, Null, Pipeline, _opus_sink, OpusFileSource = _lxst_symbols()
@@ -349,6 +390,15 @@ class VoicemailManager:
                 self.telephone_manager.mute_receive()
 
             try:
+                if not os.path.exists(greeting_path):
+                    if self.has_espeak or android_tts._is_chaquopy_android():
+                        try:
+                            self.generate_greeting(self.config.voicemail_greeting.get())
+                        except Exception as exc:
+                            RNS.log(
+                                f"Voicemail: Could not generate initial greeting: {exc}",
+                                RNS.LOG_ERROR,
+                            )
                 # Wait for link to stabilize
                 RNS.log(
                     f"Voicemail: Waiting {self.STABILIZATION_DELAY}s for link stabilization...",

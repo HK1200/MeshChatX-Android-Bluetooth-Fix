@@ -21,9 +21,9 @@ Usage:
         --version 4.9.5 --tag v4.9.5 --track release \
         -o upload/update.json --rsm upload/update.rsm
 
-    # Verify an rsm against a signer hash (default: the tree-rsm signer):
+    # Verify an rsm against a signer hash (default: the HK update signer):
     python3 scripts/build/update_manifest.py verify upload/update.rsm \
-        --signer e46112d44649266d71fe2193e00a4710
+        --signer 4d3aaedcc9aab76c61353deed5adfb8c
 
 Environment:
     RNS_ID_PATH          private identity file for "sign"
@@ -54,7 +54,7 @@ from meshchatx.src.update_rsm import (
 )
 
 TRACKS = ("release", "beta", "testing")
-DEFAULT_SIGNER = "e46112d44649266d71fe2193e00a4710"
+DEFAULT_SIGNER = "4d3aaedcc9aab76c61353deed5adfb8c"
 
 # Artifact kinds that never describe an installable update payload.
 _SKIP_SUFFIXES = (

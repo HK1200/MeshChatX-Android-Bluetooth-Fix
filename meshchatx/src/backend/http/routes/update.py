@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import tempfile
 from pathlib import Path
+from urllib.parse import quote
 
 from aiohttp import web
 
@@ -37,7 +39,7 @@ def _apply_mode(kind: str, platform: str) -> dict:
     if kind == "apk" and platform == "android":
         return {
             "mode": "manual",
-            "instructions": "Open the staged APK in the app files area to install; Android verifies the package signature.",
+            "instructions": "Save the verified APK, then open it from Downloads to install. Android verifies the package signature.",
         }
     if kind in ("wheel", "pyz"):
         return {
@@ -166,6 +168,24 @@ def register_update_routes(routes, app):
                     os.unlink(tmp_path)
                 except OSError:
                     pass
+
+    @routes.get(API_V1_PREFIX + "/update/payload")
+    async def update_payload(request):
+        mgr = _manager()
+        if not mgr.enabled:
+            return http_unavailable("updates are disabled for this install")
+        path = await asyncio.to_thread(mgr.pending_payload_path)
+        if path is None:
+            return web.json_response(
+                {"error": "No verified update is staged"}, status=404
+            )
+        return web.FileResponse(
+            path,
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{quote(path.name, safe='')}",
+                "Cache-Control": "no-store",
+            },
+        )
 
     @routes.get(API_V1_PREFIX + "/update/pending")
     async def update_pending(request):

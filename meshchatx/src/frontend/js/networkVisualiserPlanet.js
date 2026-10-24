@@ -66,10 +66,10 @@ let worldScratch = [];
 
 /**
  * @param {unknown} raw
- * @returns {"flat"|"planet"}
+ * @returns {"flat"|"planet"|"radial"}
  */
 export function normalizeVisualiserViewMode(raw) {
-    if (raw === PLANET_VIEW) {
+    if (raw === PLANET_VIEW || raw === "radial") {
         return raw;
     }
     return FLAT_VIEW;

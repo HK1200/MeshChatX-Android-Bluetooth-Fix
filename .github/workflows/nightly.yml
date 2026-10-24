@@ -92,6 +92,9 @@ env:
 
 jobs:
     metadata:
+        # HK stable releases are assembled with the permanent offline key.
+        # Keep upstream nightly publishing opt-in; emulator smoke still runs.
+        if: github.repository == 'Quad4-Software/MeshChatX' || github.event_name == 'workflow_dispatch'
         name: Prepare Testing tag
         runs-on: ubuntu-latest
         outputs:
@@ -100,14 +103,14 @@ jobs:
             skip_release: ${{ steps.meta.outputs.skip_release }}
         steps:
             - name: Harden runner
-              uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+              uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
               with:
                   egress-policy: ${{ runner.os == 'Linux' && 'block' || 'audit' }}
                   allowed-endpoints: ${{ env.HARDEN_ENDPOINTS }}
             - name: Checkout
               uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
               with:
-                  ref: master
+                  ref: ${{ github.event.repository.default_branch }}
                   fetch-depth: 0
                   persist-credentials: false
 
@@ -131,7 +134,7 @@ jobs:
                       last_testing_sha="$(git rev-parse "refs/tags/${last_testing_tag}^{commit}" 2>/dev/null || true)"
                     fi
                     if [ -n "${last_testing_sha}" ] && [ "${last_testing_sha}" = "${full_sha}" ]; then
-                      echo "No new commits on master since last Testing release (${last_testing_tag} @ ${last_testing_sha}); skipping scheduled release."
+                      echo "No new commits on the default branch since last Testing release (${last_testing_tag} @ ${last_testing_sha}); skipping scheduled release."
                       skip_release=true
                     fi
                   fi
@@ -142,7 +145,7 @@ jobs:
                   echo "Testing tag: ${tag} @ ${full_sha} (skip_release=${skip_release})"
 
     tag:
-        name: Tag master and dispatch build-release
+        name: Tag default branch and dispatch build-release
         needs: metadata
         if: needs.metadata.outputs.skip_release != 'true'
         runs-on: ubuntu-latest
@@ -151,14 +154,14 @@ jobs:
             actions: write
         steps:
             - name: Harden runner
-              uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+              uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
               with:
                   egress-policy: ${{ runner.os == 'Linux' && 'block' || 'audit' }}
                   allowed-endpoints: ${{ env.HARDEN_ENDPOINTS }}
             - name: Checkout
               uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
               with:
-                  ref: master
+                  ref: ${{ github.event.repository.default_branch }}
                   fetch-depth: 0
                   # Tag push needs the persisted token (git push origin).
                   persist-credentials: true
@@ -205,14 +208,14 @@ jobs:
             contents: write
         steps:
             - name: Harden runner
-              uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+              uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
               with:
                   egress-policy: ${{ runner.os == 'Linux' && 'block' || 'audit' }}
                   allowed-endpoints: ${{ env.HARDEN_ENDPOINTS }}
             - name: Checkout
               uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
               with:
-                  ref: master
+                  ref: ${{ github.event.repository.default_branch }}
                   persist-credentials: false
 
             - name: Keep newest Testing prereleases
@@ -228,17 +231,17 @@ jobs:
         timeout-minutes: 20
         steps:
             - name: Harden runner
-              uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+              uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
               with:
                   egress-policy: ${{ runner.os == 'Linux' && 'block' || 'audit' }}
                   allowed-endpoints: ${{ env.HARDEN_ENDPOINTS }}
             - name: Checkout
               uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
               with:
-                  ref: master
+                  ref: ${{ github.event.repository.default_branch }}
                   persist-credentials: false
             - name: Set up development environment
-              uses: $/.github/actions/setup-dev-environment
+              uses: ./.github/actions/setup-dev-environment
               with:
                   python-version: ${{ env.PYTHON_VERSION }}
                   uv-version: ${{ env.UV_VERSION }}
@@ -251,14 +254,14 @@ jobs:
         timeout-minutes: 45
         steps:
             - name: Harden runner
-              uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+              uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
               with:
                   egress-policy: ${{ runner.os == 'Linux' && 'block' || 'audit' }}
                   allowed-endpoints: ${{ env.HARDEN_ENDPOINTS }}
             - name: Checkout
               uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
               with:
-                  ref: master
+                  ref: ${{ github.event.repository.default_branch }}
                   persist-credentials: false
             - name: Build Dockerfile.dev
               run: docker build -f docker/Dockerfile.dev -t meshchatx-dev:ci .
@@ -272,14 +275,14 @@ jobs:
             contents: read
         steps:
             - name: Harden runner
-              uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+              uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
               with:
                   egress-policy: ${{ runner.os == 'Linux' && 'block' || 'audit' }}
                   allowed-endpoints: ${{ env.HARDEN_ENDPOINTS }}
             - name: Checkout
               uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
               with:
-                  ref: master
+                  ref: ${{ github.event.repository.default_branch }}
                   persist-credentials: false
             - name: Summarize workflow durations and failure rates
               env:

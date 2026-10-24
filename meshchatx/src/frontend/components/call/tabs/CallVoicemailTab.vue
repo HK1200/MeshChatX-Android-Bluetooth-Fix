@@ -32,12 +32,12 @@
             <div v-if="isVoicemailSettingsExpanded" class="px-4 pb-6 space-y-6">
                 <!-- Status Banner -->
                 <div
-                    v-if="!voicemailStatus.has_espeak"
+                    v-if="!hasTts"
                     class="p-4 bg-sem-warning/10 border border-sem-warning/30 rounded-lg flex gap-3 items-start"
                 >
                     <MaterialDesignIcon icon-name="alert" class="size-5 text-sem-warning shrink-0" />
                     <div class="text-xs text-sem-fg-secondary">
-                        <p class="font-bold mb-1">eSpeak NG not installed</p>
+                        <p class="font-bold mb-1">Speech generation unavailable</p>
                         <p>
                             Text-to-speech greeting generation is unavailable. You can still record a greeting or upload
                             an audio file below.
@@ -77,10 +77,7 @@
                     ></textarea>
 
                     <!-- TTS Settings -->
-                    <div
-                        class="grid grid-cols-2 gap-3 mt-2"
-                        :class="{ 'opacity-50 pointer-events-none': !voicemailStatus.has_espeak }"
-                    >
+                    <div class="grid grid-cols-2 gap-3 mt-2" :class="{ 'opacity-50 pointer-events-none': !hasTts }">
                         <div class="space-y-1">
                             <label class="text-[10px] font-bold text-sem-fg-muted uppercase tracking-tighter">{{
                                 $t("call.tts_speed")
@@ -115,7 +112,7 @@
                                 "
                             />
                         </div>
-                        <div class="space-y-1">
+                        <div v-if="!isAndroidTts" class="space-y-1">
                             <label class="text-[10px] font-bold text-sem-fg-muted uppercase tracking-tighter">{{
                                 $t("call.tts_word_gap")
                             }}</label>
@@ -147,12 +144,16 @@
 
                     <div class="flex justify-between items-center">
                         <p class="text-[10px] text-sem-fg-muted">
-                            This text will be converted to speech using eSpeak NG.
+                            {{
+                                isAndroidTts
+                                    ? "This text will be converted to speech using an installed offline Android voice."
+                                    : "This text will be converted to speech using eSpeak NG."
+                            }}
                         </p>
                         <div class="flex gap-2">
                             <button
-                                :disabled="!voicemailStatus.has_espeak || isGeneratingGreeting"
-                                :title="!voicemailStatus.has_espeak ? 'Requires eSpeak NG to be installed' : ''"
+                                :disabled="!hasTts || isGeneratingGreeting"
+                                :title="!hasTts ? 'An installed speech engine and voice are required' : ''"
                                 class="text-[10px] bg-sem-surface-muted text-sem-fg-muted px-3 py-1 rounded-full font-bold hover:bg-sem-surface-raised transition-colors disabled:opacity-50"
                                 @click="$emit('save-and-generate')"
                             >
@@ -469,6 +470,14 @@ export default {
         return {
             isVoicemailSettingsExpanded: false,
         };
+    },
+    computed: {
+        hasTts() {
+            return this.voicemailStatus.has_tts ?? this.voicemailStatus.has_espeak ?? false;
+        },
+        isAndroidTts() {
+            return this.voicemailStatus.tts_provider === "android";
+        },
     },
     methods: {
         onSearchInput(value) {

@@ -3,6 +3,9 @@
 # Chainguard/Wolfi final-stage packages, pip bootstrap, and meshchat user.
 set -eu
 
+# Refresh inherited runtime packages as well as newly installed dependencies.
+# Pinned base images otherwise retain fixed vulnerabilities until repinned.
+apk upgrade --no-cache
 apk add --no-cache opus libffi shadow libseccomp
 
 groupadd -g 1000 meshchat

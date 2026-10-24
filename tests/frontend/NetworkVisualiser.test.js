@@ -72,6 +72,7 @@ describe("NetworkVisualiser.vue", () => {
     let axiosMock;
 
     beforeEach(() => {
+        localStorage.clear();
         axiosMock = {
             get: vi.fn().mockImplementation((url) => {
                 if (url.includes("/api/v1/config")) {
@@ -262,9 +263,7 @@ describe("NetworkVisualiser.vue", () => {
         wrapper.vm.stopLoading();
 
         expect(stopSimulation).toHaveBeenCalledTimes(1);
-        expect(setOptions).toHaveBeenCalledWith(
-            expect.objectContaining({ physics: { enabled: false } })
-        );
+        expect(setOptions).toHaveBeenCalledWith(expect.objectContaining({ physics: { enabled: false } }));
     });
 
     it("the next update after stopLoading gets a fresh abort signal and completes", async () => {
@@ -752,6 +751,39 @@ describe("NetworkVisualiser.vue", () => {
         wrapper.vm.onViewModeChange("flat");
         expect(wrapper.vm.viewMode).toBe("flat");
         expect(proc).not.toHaveBeenCalled();
+        wrapper.unmount();
+    });
+
+    it("switches Flat → Radial → Flat without losing positions or enabling radial physics", async () => {
+        vi.spyOn(NetworkVisualiser.methods, "init").mockImplementation(() => {});
+        const wrapper = mountVisualiser();
+        const flat = { me: { x: 0, y: 0 }, eth0: { x: 210, y: 0 }, node1: { x: 420, y: 80 } };
+        wrapper.vm.network = {
+            getPositions: vi.fn(() => flat),
+            setOptions: vi.fn(),
+            redraw: vi.fn(),
+            fit: vi.fn(),
+            destroy: vi.fn(),
+        };
+        wrapper.vm.config = { display_name: "Me", identity_hash: "abc" };
+        wrapper.vm.interfaces = [{ name: "eth0", status: true }];
+        wrapper.vm.pathTable = [{ hash: "node1", interface: "eth0", hops: 1 }];
+        wrapper.vm.announces = { node1: { destination_hash: "node1", aspect: "lxmf.delivery", display_name: "Peer" } };
+        await wrapper.vm.processVisualization();
+        await wrapper.vm.onViewModeChange("radial");
+        const peer = wrapper.vm.nodes.get("node1");
+        expect(Math.hypot(peer.x, peer.y)).toBeCloseTo(560);
+        expect(peer.fixed).toBe(true);
+        expect(wrapper.vm.cachedPositions.node1).toEqual(flat.node1);
+        expect(wrapper.vm.network.setOptions).toHaveBeenLastCalledWith(
+            expect.objectContaining({ physics: { enabled: false } })
+        );
+        wrapper.vm.network.getPositions.mockReturnValue({ node1: { x: peer.x, y: peer.y } });
+        await wrapper.vm.onViewModeChange("flat");
+        expect(wrapper.vm.nodes.get("node1")).toMatchObject({ ...flat.node1, fixed: false });
+        expect(wrapper.vm.network.setOptions).toHaveBeenLastCalledWith(
+            expect.objectContaining({ physics: { enabled: true } })
+        );
         wrapper.unmount();
     });
 

@@ -62,6 +62,7 @@
 </template>
 
 <script>
+import { radialPositions } from "../../js/networkVisualiserRadial.js";
 import { getCurrentInstance } from "vue";
 import { useNetworkStore } from "../../js/stores/networkStore";
 import { useConfigStore } from "../../js/stores/configStore";
@@ -266,6 +267,7 @@ export default {
             fpsFrameCount: 0,
             fpsLastSampleMs: 0,
             cachedPositions: {},
+            leavingRadialLayout: false,
             resetCameraOnNextGraph: false,
             batterySaverPrefs: loadBatterySaverPrefs(),
             suppressLiveLayoutPersist: false,
@@ -431,7 +433,12 @@ export default {
             const prevDisabled = this.showDisabledInterfaces;
             const prevDiscovered = this.showDiscoveredInterfaces;
             const prevViewMode = this.viewMode;
+            const flatPositions = this.snapshotNodePositions();
             this.loadVisualiserDisplayPrefs();
+            if (this.viewMode === "radial" && prevViewMode !== "radial") {
+                this.cachedPositions = { ...this.cachedPositions, ...flatPositions };
+            }
+            this.leavingRadialLayout = prevViewMode === "radial" && this.viewMode !== "radial";
             this.applyBatterySaverVisualiserPrefs();
             this.webglEngine?.setViewMode?.(this.viewMode);
             if (this.preferredRenderer !== prevRenderer) {
@@ -591,6 +598,7 @@ export default {
             }
         },
         snapshotNodePositions() {
+            if (this.viewMode === "radial") return {};
             if (this.webglEngine) {
                 const snap = this.webglEngine.getPositions() || {};
                 const out = {};
@@ -988,9 +996,19 @@ export default {
         onViewModeChange(next) {
             const normalized = normalizeVisualiserViewMode(next);
             if (normalized === this.viewMode) return;
+            const previous = this.viewMode;
+            if (normalized === "radial") {
+                this.cachedPositions = { ...this.cachedPositions, ...this.snapshotNodePositions() };
+            }
             this.viewMode = normalized;
             persistVisualiserViewMode(normalized, { emit: false });
             this.webglEngine?.setViewMode?.(normalized);
+            if (normalized === "radial" || previous === "radial") {
+                this.leavingRadialLayout = previous === "radial";
+                this.resetCameraOnNextGraph = true;
+                this.refreshPhysicsEnabled({ skipSnapshot: true });
+                return this.processVisualization();
+            }
         },
         destroyActiveRenderer() {
             this.hoverTooltip = null;
@@ -1021,7 +1039,7 @@ export default {
             }
             try {
                 this.webglEngine = createVisualiserWebGLEngine(canvas, {
-                    getLiveLayout: () => this.enablePhysics === true,
+                    getLiveLayout: () => this.enablePhysics === true && this.viewMode !== "radial",
                     isDark: () => this.resolveVisualiserIsDark(),
                     onNodeActivate: (id, meta) => this.onWebGLNodeActivate(id, meta),
                     onHover: (id, meta, x, y) => this.onWebGLHover(id, meta, x, y),
@@ -1042,7 +1060,7 @@ export default {
             }
         },
         refreshPhysicsEnabled(options = {}) {
-            const skipSnapshot = options.skipSnapshot === true;
+            const skipSnapshot = options.skipSnapshot === true || this.viewMode === "radial";
             if (this.webglEngine) {
                 this.webglEngine.setLiveLayout(this.enablePhysics);
                 if (!this.enablePhysics && !skipSnapshot) {
@@ -1059,11 +1077,12 @@ export default {
                 this.snapshotNetworkPositions();
             }
             this.network.setOptions({
-                physics: { enabled: this.enablePhysics },
+                physics: { enabled: this.enablePhysics && this.viewMode !== "radial" },
                 edges: { smooth: VIZ_EDGE_SMOOTH },
             });
         },
         snapshotNetworkPositions() {
+            if (this.viewMode === "radial") return;
             if (!this.network || typeof this.network.getPositions !== "function") return;
             const ids = this.nodes.getIds();
             if (!ids.length) return;
@@ -1243,7 +1262,7 @@ export default {
                         improvedLayout: false, // faster for large networks
                     },
                     physics: {
-                        enabled: this.enablePhysics,
+                        enabled: this.enablePhysics && this.viewMode !== "radial",
                         solver: "barnesHut",
                         barnesHut: {
                             // Match upstream gravity, as avoidOverlap is O(n) per tick
@@ -1318,7 +1337,7 @@ export default {
                 if (!this.physicsPausedForDrag || !this.network) return;
                 this.physicsPausedForDrag = false;
                 this.network.setOptions({
-                    physics: { enabled: this.enablePhysics },
+                    physics: { enabled: this.enablePhysics && this.viewMode !== "radial" },
                     edges: { smooth: VIZ_EDGE_SMOOTH },
                 });
             });
@@ -1662,7 +1681,9 @@ export default {
                     }
                     if (pausePhysics && this.network && !this.physicsPausedForDrag) {
                         this.network.setOptions({
-                            physics: { enabled: Boolean(physicsWasOn || this.enablePhysics) },
+                            physics: {
+                                enabled: Boolean(physicsWasOn || this.enablePhysics) && this.viewMode !== "radial",
+                            },
                             edges: { smooth: VIZ_EDGE_SMOOTH },
                         });
                     }
@@ -1684,15 +1705,17 @@ export default {
                     posById[id] = { x: p.x, y: p.y };
                 }
             }
+            const leavingRadial = this.leavingRadialLayout;
+            this.leavingRadialLayout = false;
             const existingNodeIds = this.nodes.getIds();
-            if (this.webglEngine) {
+            if (!leavingRadial && this.viewMode !== "radial" && this.webglEngine) {
                 const snap = this.webglEngine.getPositions() || {};
                 for (const [id, p] of Object.entries(snap)) {
                     if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) {
                         posById[id] = { x: p.x, y: p.y };
                     }
                 }
-            } else if (this.network) {
+            } else if (!leavingRadial && this.viewMode !== "radial" && this.network) {
                 const snap = this.network.getPositions(existingNodeIds);
                 if (snap) {
                     for (const id of existingNodeIds) {
@@ -1807,6 +1830,18 @@ export default {
                 }
             }
 
+            const isRadial = this.viewMode === "radial";
+            if (isRadial) {
+                Object.assign(
+                    posById,
+                    radialPositions({
+                        interfaces: [...interfacesPayload, ...pathOnlyPayload].map((entry) => entry.name),
+                        discovered: discoveredPayload.map((entry) => entry.id),
+                        pathTable: this.pathTable,
+                        hopMax: this.hopFilterMax,
+                    })
+                );
+            }
             const meLabel = this.config?.display_name ?? "Local Node";
             const fullReq = {
                 me_label: meLabel,
@@ -2023,7 +2058,7 @@ export default {
             }
             graphEdges = graphEdges.filter((e) => e && graphNodeIds.has(e.from) && graphNodeIds.has(e.to));
             for (const node of graphNodes) {
-                node.fixed = node.id === "me";
+                node.fixed = isRadial || node.id === "me";
             }
 
             if (!silent) {
@@ -2042,7 +2077,7 @@ export default {
                     missingIds.add(n.id);
                 }
             }
-            const shouldSettle = missingIds.size > 0 && isVisualiserWasmReady();
+            const shouldSettle = !isRadial && missingIds.size > 0 && isVisualiserWasmReady();
             if (shouldSettle) {
                 const settleNodes = layoutNodes.map((n) => ({
                     ...n,
@@ -2096,7 +2131,7 @@ export default {
                 this.graphNodeCount = counts.nodes;
                 this.graphEdgeCount = counts.edges;
                 const snap = this.webglEngine.getPositions() || {};
-                this.cachedPositions = { ...this.cachedPositions, ...snap };
+                if (!isRadial) this.cachedPositions = { ...this.cachedPositions, ...snap };
                 this.loadedNodesCount = this.pathTable.length;
                 this.totalNodesToLoad = 0;
                 this.loadedNodesCount = 0;
@@ -2155,7 +2190,7 @@ export default {
             } finally {
                 if (pauseSilentPhysics && this.network && !this.physicsPausedForDrag) {
                     this.network.setOptions({
-                        physics: { enabled: this.enablePhysics },
+                        physics: { enabled: this.enablePhysics && this.viewMode !== "radial" },
                         edges: { smooth: VIZ_EDGE_SMOOTH },
                     });
                 }

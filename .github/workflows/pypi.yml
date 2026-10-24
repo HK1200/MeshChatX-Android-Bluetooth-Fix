@@ -13,8 +13,8 @@
 # Pinned first-party actions (bump tag and SHA together when upgrading):
 #   actions/checkout@v6.0.1            8e8c483db84b4bee98b60c0593521ed34d9990e8
 #   actions/setup-python@v6.2.0        a309ff8b426b58ec0e2a45f0f869d46889d02405
-#   actions/upload-artifact@v5.0.0     330a01c490aca151604b8cf639adc76d48f6c5d4
-#   actions/download-artifact@v5.0.0   634f93cb2916e3fdff6788551b99b062d0335ce0
+#   actions/upload-artifact@v7.0.2 cf430e030ddbb5b0abf93d22962f4752f3646cd9
+#   actions/download-artifact@v8.0.2 9000827ccba6bdab643e8b6fd33ac0654aef8333
 #
 # SLSA generator: SHA-pin this reusable workflow. Nested composite actions
 # inside it stay on tag v2.1.0, so repo Actions SHA pinning cannot be required.
@@ -111,7 +111,7 @@ env:
 jobs:
     frontend:
         name: Build frontend artifact
-        uses: $/.github/workflows/frontend-build.yml
+        uses: ./.github/workflows/frontend-build.yml
         permissions:
             contents: read
         with:
@@ -132,7 +132,7 @@ jobs:
             FRONTEND_ARTIFACT_NAME: ${{ needs.frontend.outputs.artifact_name }}
         steps:
             - name: Harden runner
-              uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+              uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
               with:
                   egress-policy: ${{ runner.os == 'Linux' && 'block' || 'audit' }}
                   allowed-endpoints: ${{ env.HARDEN_ENDPOINTS }}
@@ -147,7 +147,7 @@ jobs:
                   python-version: ${{ env.PYTHON_VERSION }}
 
             - name: Fetch frontend artifact
-              uses: $/.github/actions/fetch-frontend-artifact
+              uses: ./.github/actions/fetch-frontend-artifact
               with:
                   artifact-name: ${{ env.FRONTEND_ARTIFACT_NAME }}
 
@@ -226,7 +226,7 @@ jobs:
                   rm -f /tmp/cosign.key
 
             - name: Store distribution packages
-              uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
               with:
                   name: python-package-distributions
                   path: dist/
@@ -267,12 +267,12 @@ jobs:
             id-token: write
         steps:
             - name: Harden runner
-              uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+              uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
               with:
                   egress-policy: ${{ runner.os == 'Linux' && 'block' || 'audit' }}
                   allowed-endpoints: ${{ env.HARDEN_ENDPOINTS }}
             - name: Download distributions
-              uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
               with:
                   name: python-package-distributions
                   path: dist/

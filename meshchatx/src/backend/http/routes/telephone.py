@@ -719,8 +719,10 @@ def register_telephone_routes(routes, app):
             app.voicemail_manager.greetings_dir,
             "greeting.opus",
         )
+        speech_status = await asyncio.to_thread(app.voicemail_manager.get_tts_status)
         return web.json_response(
             {
+                **speech_status,
                 "has_espeak": app.voicemail_manager.has_espeak,
                 "is_recording": app.voicemail_manager.is_recording,
                 "is_greeting_recording": app.voicemail_manager.is_greeting_recording,

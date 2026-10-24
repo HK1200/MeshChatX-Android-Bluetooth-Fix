@@ -112,14 +112,14 @@ describe("NetworkVisualiserToolbar", () => {
         expect(manualIcons).toContain("loading");
     });
 
-    it("hides planet view buttons unless the engine is WebGL", () => {
-        const wasm = mountToolbar({ engineMode: "wasm" });
-        expect(wasm.find("#visualiser-view-planet").exists()).toBe(false);
-        expect(wasm.find("#visualiser-view-flat").exists()).toBe(false);
+    it("keeps the view controls visible on fallback", () => {
+        const wasm = mountToolbar({ engineMode: "wasm", viewMode: "planet" });
+        expect(wasm.find("#visualiser-view-planet").exists()).toBe(true);
+        expect(wasm.find("#visualiser-view-flat").exists()).toBe(true);
         wasm.unmount();
 
         const vis = mountToolbar({ engineMode: "fallback" });
-        expect(vis.find("#visualiser-view-planet").exists()).toBe(false);
+        expect(vis.find("#visualiser-view-radial").exists()).toBe(true);
         vis.unmount();
 
         const webgl = mountToolbar({ engineMode: "webgl", viewMode: "flat" });
@@ -127,6 +127,12 @@ describe("NetworkVisualiserToolbar", () => {
         expect(webgl.find("#visualiser-view-planet").exists()).toBe(true);
         expect(webgl.find("#visualiser-view-flat").attributes("aria-pressed")).toBe("true");
         expect(webgl.find("#visualiser-view-planet").attributes("aria-pressed")).toBe("false");
+    });
+
+    it("selects Radial on the fallback engine", async () => {
+        const w = mountToolbar({ engineMode: "fallback" });
+        await w.find("#visualiser-view-radial").trigger("click");
+        expect(w.emitted("update:viewMode")?.[0]).toEqual(["radial"]);
     });
 
     it("emits planet view mode from the WebGL toolbar", async () => {

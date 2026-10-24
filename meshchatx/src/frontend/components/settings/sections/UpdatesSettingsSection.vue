@@ -53,6 +53,7 @@
                     {{ $t("updates.restart_to_apply") }}
                 </button>
                 <button
+                    v-if="isElectron"
                     type="button"
                     class="px-3 py-1.5 rounded-lg border border-sem-border text-sm hover:border-sem-border disabled:opacity-50"
                     :disabled="busy"
@@ -60,6 +61,14 @@
                 >
                     {{ $t("updates.show_file") }}
                 </button>
+                <a
+                    v-else
+                    :href="pendingPayloadUrl"
+                    :download="pending.file"
+                    class="px-3 py-1.5 rounded-lg border border-sem-border text-sm hover:border-sem-border"
+                >
+                    {{ $t("updates.save_file") }}
+                </a>
                 <button
                     type="button"
                     class="px-3 py-1.5 rounded-lg border border-sem-border text-sm hover:border-sem-border disabled:opacity-50"
@@ -115,6 +124,7 @@ import {
     downloadUpdate,
     getPendingUpdate,
     getUpdateStatus,
+    pendingUpdateDownloadUrl,
 } from "../../../js/api/update.js";
 import ElectronUtils from "../../../js/ElectronUtils";
 
@@ -137,6 +147,9 @@ export default {
         };
     },
     computed: {
+        pendingPayloadUrl() {
+            return pendingUpdateDownloadUrl();
+        },
         busy() {
             return this.busyCheck || this.busyDownload || this.busyApply;
         },

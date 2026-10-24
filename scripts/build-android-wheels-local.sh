@@ -260,7 +260,7 @@ if "chaquopy_python_abi3_link" not in text:
     # Multiple Python SONAMEs can resolve to libpython.so.
     # Keep the first valid link rather than attempting to create it twice.
     guarded = (
-        '                    if not exists(f"{reqs_lib_dir}/{link_filename}"):\n'
+        '                    if not os.path.lexists(f"{reqs_lib_dir}/{link_filename}"):\n'
         '                            run(f"ln -s {filename} {reqs_lib_dir}/{link_filename}")'
     )
     text = text.replace(needle, guarded, 1)
@@ -269,7 +269,7 @@ if "chaquopy_python_abi3_link" not in text:
         # chaquopy_python_abi3_link: PyO3 0.29 abi3 Android builds link libpython3.so (PEP 738).
         python_soname = f"libpython{self.python}.so"
         python_abi3_link = "libpython3.so"
-        if exists(f"{reqs_lib_dir}/{python_soname}") and not exists(f"{reqs_lib_dir}/{python_abi3_link}"):
+        if exists(f"{reqs_lib_dir}/{python_soname}") and not os.path.lexists(f"{reqs_lib_dir}/{python_abi3_link}"):
             run(f"ln -s {python_soname} {reqs_lib_dir}/{python_abi3_link}")"""
     text = text.replace(guarded, guarded + insert, 1)
     changed = True

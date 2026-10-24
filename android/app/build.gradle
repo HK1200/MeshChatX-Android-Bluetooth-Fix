@@ -50,8 +50,8 @@ android {
         applicationId System.getenv("MESHCHATX_APPLICATION_ID") ?: "com.haadkoe.meshchatx"
         minSdk 24
         targetSdk 35
-        versionCode 100002
-        versionName "4.10.7-HK-1.0.1"
+        versionCode 100003
+        versionName "4.10.7-HK-1.0.2"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
@@ -112,6 +112,18 @@ android.applicationVariants.all { variant ->
 tasks.register("verifyOpusJniLibs", Exec) {
     workingDir = repoRoot
     commandLine("python3", "scripts/android/provision-opus.py",
+        "--verify-only", "--abis", selectedAndroidAbis.join(","))
+}
+
+tasks.register("verifyOggJniLibs", Exec) {
+    workingDir = repoRoot
+    commandLine("python3", "scripts/android/provision-ogg.py",
+        "--verify-only", "--abis", selectedAndroidAbis.join(","))
+}
+
+tasks.register("verifyOpusFileJniLibs", Exec) {
+    workingDir = repoRoot
+    commandLine("python3", "scripts/android/provision-opusfile.py",
         "--verify-only", "--abis", selectedAndroidAbis.join(","))
 }
 
@@ -231,7 +243,7 @@ tasks.register("verifyVendorWheels") {
 
 tasks.configureEach { task ->
     if (task.name == "preBuild") {
-        task.dependsOn(tasks.named("syncCodec2JniLibs"), tasks.named("verifyVendorWheels"), tasks.named("verifyOpusJniLibs"))
+        task.dependsOn(tasks.named("syncCodec2JniLibs"), tasks.named("verifyVendorWheels"), tasks.named("verifyOpusJniLibs"), tasks.named("verifyOggJniLibs"), tasks.named("verifyOpusFileJniLibs"))
     }
 }
 
@@ -291,7 +303,32 @@ tasks.register("fetchRepositoryBundledWheels", Exec) {
     }
 }
 
+// Planet and the accelerated renderer need the complete, verified WASM pair.
+// Fail packaging instead of silently shipping an Android UI with inert views.
+tasks.register("verifyVisualiserAssets") {
+    doLast {
+        def assetDir = new File(meshchatSourceDir, "public/vendor/visualiser-wasm")
+        def manifestFile = new File(assetDir, "integrity.json")
+        if (!manifestFile.isFile()) {
+            throw new org.gradle.api.GradleException("Visualiser assets missing. Run the frontend build with visualiser WASM enabled before building Android.")
+        }
+        def manifest = new groovy.json.JsonSlurper().parse(manifestFile)
+        ["visualiser.wasm": "wasm", "wasm_exec.js": "wasmExec"].each { name, key ->
+            def asset = new File(assetDir, name)
+            if (!asset.isFile()) {
+                throw new org.gradle.api.GradleException("Missing visualiser asset ${name}. Build visualiser WASM and rebuild the frontend before packaging Android.")
+            }
+            def digest = java.security.MessageDigest.getInstance("SHA-384").digest(asset.bytes)
+            def sri = "sha384-" + java.util.Base64.encoder.encodeToString(digest)
+            if (manifest[key] != sri) {
+                throw new org.gradle.api.GradleException("Visualiser asset integrity mismatch: ${name}. Rebuild the frontend before packaging Android.")
+            }
+        }
+    }
+}
+
 tasks.register("syncMeshchatPython", Sync) {
+    dependsOn("verifyVisualiserAssets")
     dependsOn("fetchRepositoryBundledWheels")
     if (!meshchatSourceDir.exists()) {
         throw new org.gradle.api.GradleException("Missing meshchatx source directory at ${meshchatSourceDir}")

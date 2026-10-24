@@ -70,7 +70,12 @@
     "android/vendor/usb4a-0.3.0-py3-none-any.whl": "4e4bf7c78b0bfcf2fd6eee28c82540cdc68ddfeb46818ab1a7aa1482f0d3743e",
     "android/vendor/usbserial4a-0.4.0-py3-none-any.whl": "2b6a42c2c1f78e892d76ce6a294ad89089d31c60a5d74cb39a33f3aa8b82d74d",
     "android/vendor/numpy-1.26.2-2-cp311-cp311-android_24_arm64_v8a.whl": "4e41ac97768257f5427d48be24525b3836165a5d98d1d0095949270ab3346238",
-    "android/vendor/numpy-1.26.2-2-cp311-cp311-android_24_x86_64.whl": "054a16fa42de5a8f0ebcb35f845f45b871417909ba3082ce83a7ff78cc65e265"
+    "android/vendor/numpy-1.26.2-2-cp311-cp311-android_24_x86_64.whl": "054a16fa42de5a8f0ebcb35f845f45b871417909ba3082ce83a7ff78cc65e265",
+    "android/app/src/main/jniLibs/arm64-v8a/libogg.so": "78e0bab6f22aa5dae284c5c6eb9924d46adf10ce34acd6750afb16594d32777c",
+    "android/app/src/main/jniLibs/x86_64/libogg.so": "7b3d4b7209e829e08645ecd38d345b460e0de6428abb992feff60a36adf185e0",
+    "android/app/src/main/jniLibs/armeabi-v7a/libogg.so": "4ff19ab4d3f84f5d0bd3683b1e294621e3a7c317a09a40d54b9d939f73ebffc1",
+    "android/app/src/main/jniLibs/arm64-v8a/libopusfile.so": "56f5b9111cf2e3e97cc63ae9f89a401b2f5b3b2b6842965cff6f5e8d7a5f5f7b",
+    "android/app/src/main/jniLibs/x86_64/libopusfile.so": "29e9a04336661b31c90297fa9b35545ca71d007448e5b9244dc8882b74754c43"
   },
   "numpy_quad_runtime": {
     "numpy_build": 2,

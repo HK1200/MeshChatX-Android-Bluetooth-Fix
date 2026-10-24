@@ -142,7 +142,7 @@
                     />
                 </div>
 
-                <div v-if="engineMode === 'webgl'" class="flex items-center justify-between gap-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
                     <span class="text-sm font-semibold text-sem-fg-muted">{{ $t("visualiser.view_mode") }}</span>
                     <div
                         class="inline-flex shrink-0 rounded-lg border border-sem-border bg-sem-surface-muted p-0.5 border-sem-border dark:bg-sem-surface"
@@ -176,6 +176,18 @@
                             @click="$emit('update:viewMode', 'planet')"
                         >
                             {{ $t("visualiser.view_mode_planet") }}
+                        </button>
+                        <button
+                            id="visualiser-view-radial"
+                            type="button"
+                            class="rounded-md px-2.5 py-1 text-[11px] font-bold"
+                            :class="
+                                viewMode === 'radial' ? 'bg-sem-surface text-sem-info shadow-xs' : 'text-sem-fg-muted'
+                            "
+                            :aria-pressed="viewMode === 'radial' ? 'true' : 'false'"
+                            @click="$emit('update:viewMode', 'radial')"
+                        >
+                            {{ $t("visualiser.view_mode_radial") }}
                         </button>
                     </div>
                 </div>
@@ -316,7 +328,7 @@ export default {
             type: String,
             default: "flat",
             validator(v) {
-                return v === "flat" || v === "planet";
+                return v === "flat" || v === "planet" || v === "radial";
             },
         },
         fps: { type: Number, default: 0 },

@@ -1,6 +1,6 @@
 # Pinned actions (bump tag and SHA together when upgrading):
 #   actions/setup-python@v6.2.0  a309ff8b426b58ec0e2a45f0f869d46889d02405
-#   actions/cache@v4.2.0         1bd1e32a3bdc45362d1e726936510720a7c30a57
+#   actions/cache@v6.1.0 55cc8345863c7cc4c66a329aec7e433d2d1c52a9
 name: Set up Python and UV
 description: Python runtime, checksum-verified UV binary, and UV download cache
 
@@ -33,7 +33,7 @@ runs:
           run: bash scripts/ci/github-install-uv.sh
 
         - name: Cache UV downloads
-          uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+          uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
           with:
               path: ~/.cache/uv
               key: uv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('uv.lock') }}

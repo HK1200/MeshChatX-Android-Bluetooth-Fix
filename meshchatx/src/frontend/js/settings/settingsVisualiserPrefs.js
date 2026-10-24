@@ -12,10 +12,10 @@ const KEY_VIEW_MODE = "meshchatx.visualiser.viewMode";
 export const VISUALISER_DISPLAY_PREFS_CHANGED = "visualiser-display-prefs-changed";
 
 /** @typedef {"auto" | "webgl" | "vis"} VisualiserRendererPref */
-/** @typedef {"flat" | "planet" | "cluster"} VisualiserViewModePref */
+/** @typedef {"flat" | "planet" | "radial"} VisualiserViewModePref */
 
 export const VISUALISER_RENDERER_OPTIONS = ["auto", "webgl", "vis"];
-export const VISUALISER_VIEW_MODE_OPTIONS = ["flat", "planet", "cluster"];
+export const VISUALISER_VIEW_MODE_OPTIONS = ["flat", "planet", "radial"];
 
 /**
  * @param {string} key
@@ -66,11 +66,11 @@ export function normalizeVisualiserRenderer(raw) {
  * @returns {VisualiserViewModePref}
  */
 export function normalizeVisualiserViewMode(raw) {
-    if (raw === "radial") {
-        // Stored preference from the retired radial view maps to cluster.
-        return "cluster";
+    if (raw === "cluster") {
+        // Accept the intermediate cluster preference as the original hop-ring view.
+        return "radial";
     }
-    if (raw === "planet" || raw === "cluster") {
+    if (raw === "planet" || raw === "radial") {
         return raw;
     }
     return "flat";

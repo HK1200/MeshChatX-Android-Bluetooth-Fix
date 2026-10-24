@@ -5,7 +5,7 @@
 # Pinned first-party actions (bump tag and SHA together when upgrading):
 #   actions/checkout@v6.0.1            8e8c483db84b4bee98b60c0593521ed34d9990e8
 #   actions/setup-python@v6.2.0        a309ff8b426b58ec0e2a45f0f869d46889d02405
-#   actions/cache@v4.2.0               1bd1e32a3bdc45362d1e726936510720a7c30a57
+#   actions/cache@v6.1.0 55cc8345863c7cc4c66a329aec7e433d2d1c52a9
 
 name: Native build
 
@@ -94,7 +94,7 @@ env:
 jobs:
     frontend:
         name: Build frontend artifact
-        uses: $/.github/workflows/frontend-build.yml
+        uses: ./.github/workflows/frontend-build.yml
         permissions:
             contents: read
         with:
@@ -132,7 +132,7 @@ jobs:
             MESHCHATX_FRONTEND_PREBUILT: "1"
         steps:
             - name: Harden runner
-              uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+              uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
               with:
                   egress-policy: ${{ runner.os == 'Linux' && 'block' || 'audit' }}
                   allowed-endpoints: ${{ env.HARDEN_ENDPOINTS }}
@@ -142,19 +142,19 @@ jobs:
                   persist-credentials: false
 
             - name: Set up Python and UV
-              uses: $/.github/actions/setup-python-uv
+              uses: ./.github/actions/setup-python-uv
               with:
                   python-version: ${{ env.PYTHON_VERSION }}
                   uv-version: ${{ env.UV_VERSION }}
 
             - name: Set up Node and pnpm
-              uses: $/.github/actions/setup-node-pnpm
+              uses: ./.github/actions/setup-node-pnpm
               with:
                   node-version: ${{ env.NODE_VERSION }}
                   pnpm-version: ${{ env.PNPM_VERSION }}
 
             - name: Cache electron downloads and builder toolsets
-              uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
               with:
                   path: |
                       ~/.cache/electron
@@ -172,7 +172,7 @@ jobs:
               run: bash scripts/ci/github-install-macos-x64-port-deps.sh
 
             - name: Fetch frontend artifact
-              uses: $/.github/actions/fetch-frontend-artifact
+              uses: ./.github/actions/fetch-frontend-artifact
               with:
                   artifact-name: ${{ env.FRONTEND_ARTIFACT_NAME }}
 
