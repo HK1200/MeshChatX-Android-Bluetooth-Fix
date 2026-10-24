@@ -1,25 +1,19 @@
-# Legal
+# MeshChatX HK licensing and attribution
 
-## Legal Inquiries
+## Questions about this build
 
-For legal inquiries related to Reticulum MeshChatX, contact:
+Use the [HK issue tracker](https://github.com/HK1200/MeshChatX-HK/issues) for non-sensitive licensing questions about this repository and its Android releases. Do not post confidential information publicly. Security reports follow [SECURITY.md](SECURITY.md).
 
-- legal@quad4.io
+## License scope
 
-## Licensing
+HK-specific modifications and additions are distributed under the existing 0BSD terms. Existing MeshChatX portions retain their 0BSD notices, and original Reticulum MeshChat portions retain their MIT notice. See [LICENSE](LICENSE) for the full terms and copyright notices.
 
-Project-owned portions are licensed under 0BSD.
-Original upstream portions from Reticulum MeshChat remain under MIT.
+Bundled dependencies retain their respective licenses and attribution. Their notices are included with the source and in the application's third-party notices. The project license does not replace dependency licenses.
 
-See [LICENSE](LICENSE) for full license text and notices.
+## Credits
 
-## Attribution
+MeshChatX HK builds on MeshChatX by Quad4 and the original Reticulum MeshChat by Liam Cottle. Additional credits are retained in [README.md](README.md), [CONTRIBUTORS](CONTRIBUTORS) and the applicable license notices.
 
-MeshChatX is a derivative of the original Reticulum MeshChat project by Liam Cottle.
-Attribution to the original author and project is maintained in this repository and on the official website: [meshchatx.com](https://meshchatx.com/).
+## License tooling
 
-## License Scope Tooling
-
-This project uses scripts/license_scope_mapper.go to assist with per-file SPDX labeling based on automated similarity scoring against upstream sources.
-
-The tool is a labeling assistant, not a legal determination of derivative-work status.
+The retained `scripts/license_scope_mapper.go` assists with per-file SPDX labels using similarity scoring. Its output is a labeling aid, not a legal determination of derivative-work status.
