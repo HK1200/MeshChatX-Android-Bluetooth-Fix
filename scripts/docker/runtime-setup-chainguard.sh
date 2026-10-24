@@ -6,6 +6,13 @@ set -eu
 # Refresh inherited runtime packages as well as newly installed dependencies.
 # Pinned base images otherwise retain fixed vulnerabilities until repinned.
 apk upgrade --no-cache
+# The dev base image can retain explicit package constraints. Replace those
+# constraints with fixed-version floors rather than accepting a no-op upgrade.
+apk add --no-cache --upgrade \
+    'ca-certificates>=20260909-r3' \
+    'ca-certificates-bundle>=20260909-r3' \
+    'curl>=8.23.0-r0' \
+    'libcurl-openssl4>=8.23.0-r0'
 apk add --no-cache opus libffi shadow libseccomp
 
 groupadd -g 1000 meshchat
