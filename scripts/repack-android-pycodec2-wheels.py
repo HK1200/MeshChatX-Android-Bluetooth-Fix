@@ -86,6 +86,16 @@ def repack_pycodec2_wheel(pycodec2_wheel: Path, libcodec2_so: Path) -> bool:
         print(f"Missing libcodec2.so for {pycodec2_wheel.name}", file=sys.stderr)
         return False
 
+    # Gradle invokes this on every build. Preserve the checksum-pinned wheel
+    # when the required library is already bundled; repacking only changes ZIP
+    # timestamps and invalidates caches/provenance in this case.
+    with zipfile.ZipFile(pycodec2_wheel) as existing:
+        try:
+            if existing.read("pycodec2/libcodec2.so") == libcodec2_so.read_bytes():
+                return True
+        except KeyError:
+            pass
+
     with tempfile.TemporaryDirectory(prefix="repack-pycodec2-") as tmp_dir:
         root = Path(tmp_dir)
         with zipfile.ZipFile(pycodec2_wheel) as zin:
