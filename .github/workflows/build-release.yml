@@ -19,7 +19,7 @@
 #   actions/download-artifact@v8.0.2 9000827ccba6bdab643e8b6fd33ac0654aef8333
 #   actions/cache@v6.1.0 55cc8345863c7cc4c66a329aec7e433d2d1c52a9
 #   actions/setup-java@v6.1.0 b843ebf9b913146b38da2eaa7aeddf76074ae1ad
-#   crazy-max/ghaction-import-gpg@v6   e89d40939c28e39f97cf32126055eeae86ba74ec
+#   crazy-max/ghaction-import-gpg@v7.0.0 2dc316deee8e90f13e1a351ab510b4d5bc0c82cd
 #
 # SLSA generator: SHA-pin this reusable workflow. Nested composite actions inside
 # generator_generic_slsa3.yml are tag-pinned at v2.1.0 (detect-workflow-js,
@@ -493,7 +493,7 @@ jobs:
             - name: Import Flatpak GPG key
               id: gpg
               if: steps.creds.outputs.run_flatpak_ostree == 'true'
-              uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec
+              uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd
               with:
                   gpg_private_key: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
                   passphrase: ${{ secrets.FLATPAK_GPG_PASSPHRASE }}
