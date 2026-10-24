@@ -86,6 +86,8 @@ env:
         *.pythonhosted.org:443
         registry.npmjs.org:443
         nodejs.org:443
+        go.dev:443
+        golang.org:443
         proxy.golang.org:443
         sum.golang.org:443
         sh.rustup.rs:443
@@ -139,7 +141,7 @@ jobs:
             packages: write
             id-token: write
         strategy:
-            max-parallel: 1
+            max-parallel: 3
             fail-fast: false
             matrix:
                 include:
@@ -163,7 +165,7 @@ jobs:
                       oci_licenses: "MIT AND 0BSD AND BSD-3-Clause AND LGPL-3.0-only"
         steps:
             - name: Harden runner
-              uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+              uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
               with:
                   egress-policy: ${{ runner.os == 'Linux' && 'block' || 'audit' }}
                   allowed-endpoints: ${{ env.HARDEN_ENDPOINTS }}
@@ -229,6 +231,12 @@ jobs:
 
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+              with:
+                  # Bound concurrent stages/architectures within each builder.
+                  # Matrix variants run on separate hosted machines.
+                  buildkitd-config-inline: |
+                      [worker.oci]
+                        max-parallelism = 2
 
             - name: Log in to GHCR
               uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6
