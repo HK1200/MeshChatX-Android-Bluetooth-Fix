@@ -26,7 +26,12 @@ from tests.backend.api_json_contract_schemas import (
 
 @pytest.fixture(autouse=True)
 def _stub_threads_for_http_contract_tests():
-    with patch("threading.Thread"):
+    # A global Thread mock also blocks a new asyncio executor. Contract tests
+    # suppress background startup but still execute the requested status reads.
+    async def inline_to_thread(function, *args, **kwargs):
+        return function(*args, **kwargs)
+
+    with patch("threading.Thread"), patch("asyncio.to_thread", new=inline_to_thread):
         yield
 
 
