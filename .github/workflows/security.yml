@@ -12,9 +12,11 @@ name: Security
 on:
     push:
         branches:
+            - main
             - master
     pull_request:
         branches:
+            - main
             - master
     schedule:
         - cron: "30 12 * * 1"

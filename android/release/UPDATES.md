@@ -8,11 +8,11 @@ HK builds use GitHub Release assets in `HK1200/MeshChatX-HK` rather than the ups
 - The pinned HK manifest signer is `4d3aaedcc9aab76c61353deed5adfb8c`. Its private RNS identity is stored outside the repository, beside the permanent APK signing key. Back it up securely; future feeds must use the same identity.
 - The update identity is separate from the APK signing certificate and from the user's Reticulum communications identity.
 
-Build and inspect metadata with `scripts/build/update_manifest.py sign --assets APK_DIRECTORY --version PYTHON_VERSION --tag RELEASE_TAG --track release --identity PRIVATE_RID -o latest.json --rsm latest.rsm`. Use a PEP 440 version such as `4.10.7+hk.1.0.2`, not the Android display version. Verify with `scripts/build/update_manifest.py verify latest.rsm` before publishing. Attach the APK, `latest.rsm` and `latest.json` to the same draft application release, verify them, then publish it as latest. No separate feed release is needed.
+Build and inspect metadata with `scripts/build/update_manifest.py sign --assets APK_DIRECTORY --version PYTHON_VERSION --tag RELEASE_TAG --track release --identity PRIVATE_RID -o latest.json --rsm latest.rsm`. Use a PEP 440 version such as `4.10.7+hk.1.0.3`, not the Android display version. Verify with `scripts/build/update_manifest.py verify latest.rsm` before publishing. Attach the APK, `latest.rsm` and `latest.json` to the same draft application release, verify them, then publish it as latest. No separate feed release is needed.
 
 `MESHCHATX_UPDATE_BASE_URL` retains the original custom-CDN layout (`BASE/TRACK/latest.rsm`, `BASE/TRACK/TAG/FILE`). Set `MESHCHATX_UPDATE_SIGNER` as well when deliberately using a different release identity. Default HK builds must not accept upstream manifests.
 
-Android saves a staged APK through `/api/v1/update/payload`, which rechecks its checksum before serving it as an attachment. The existing Android download handler saves the file to Downloads. The user opens it to install; Android still verifies the package's signing certificate. No silent installation is attempted.
+Android opens its installation confirmation after a verified APK download. If needed, allow MeshChatX HK to install updates, then return to continue. The native handoff rechecks the exact file checksum and size, its package name, the installed signing certificate and its version code before creating an installation session. Android approval is always required. Cancel keeps the installed app unchanged and leaves the download available to retry; saving the file to Downloads remains a fallback. The update session preserves the existing full-screen incoming-call permission.
 
 # Voicemail speech
 

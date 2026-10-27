@@ -2764,7 +2764,9 @@
         "online": "En linea",
         "offline": "Fuera",
         "search_nodes_placeholder": "Buscar nodos ({count})...",
-        "clear_search": "Borrar busqueda"
+        "clear_search": "Borrar busqueda",
+        "view_mode_radial": "Radial",
+        "view_mode_radial_full": "Radial completo"
     },
     "banishment": {
         "title": "Desterrados",
@@ -5475,7 +5477,8 @@
         "file_rejected": "File failed verification",
         "check_failed": "Update check failed",
         "apply_failed": "Update apply failed",
-        "manual_install_notice": "Install the verified file manually using the instructions above."
+        "manual_install_notice": "Install the verified file manually using the instructions above.",
+        "save_file": "Guardar archivo"
     },
     "traffic": {
         "upload_rate": "Upload rate",

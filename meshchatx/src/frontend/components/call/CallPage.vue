@@ -2798,20 +2798,15 @@ export default {
                 }
                 if (d && (d.kind === "error" || d.kind === "closed")) {
                     const reason = String(d.sub || d.detail || d.kind);
-                    this.logWebAudioFailure(
-                        "android-native",
-                        new Error(reason)
-                    );
+                    this.logWebAudioFailure("android-native", new Error(reason));
 
                     // Server messages and shutdown timeout warnings do not
                     // establish that the current audio session has failed.
                     const informationalError =
                         d.kind === "error" &&
-                        (
-                            d.sub === "server" ||
+                        (d.sub === "server" ||
                             d.sub === "microphone_shutdown_timeout" ||
-                            d.sub === "playback_shutdown_timeout"
-                        );
+                            d.sub === "playback_shutdown_timeout");
 
                     if (!informationalError && this.useAndroidNativeTelephone) {
                         this.stopWebAudio();

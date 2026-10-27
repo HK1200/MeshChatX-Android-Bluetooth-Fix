@@ -2764,7 +2764,9 @@
         "online": "Онлайн",
         "offline": "Офлайн",
         "search_nodes_placeholder": "Пошук вузлів ({count})...",
-        "clear_search": "Очистити пошук"
+        "clear_search": "Очистити пошук",
+        "view_mode_radial": "Радіальний",
+        "view_mode_radial_full": "Повний радіальний"
     },
     "banishment": {
         "title": "Заборонені",
@@ -5475,7 +5477,8 @@
         "file_rejected": "File failed verification",
         "check_failed": "Update check failed",
         "apply_failed": "Update apply failed",
-        "manual_install_notice": "Install the verified file manually using the instructions above."
+        "manual_install_notice": "Install the verified file manually using the instructions above.",
+        "save_file": "Зберегти файл"
     },
     "traffic": {
         "upload_rate": "Upload rate",

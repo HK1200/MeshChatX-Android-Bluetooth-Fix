@@ -24,15 +24,13 @@ except (OSError, KeyError, zipfile.BadZipFile, UnicodeError) as error:
     sys.exit(f"FAIL: Cannot inspect RNodeInterface: {error}")
 
 checks = {
-    "Paired Bluetooth devices converted to Python list":
-        "return list(devices.toArray())" in source,
-
-    "Bluetooth enumeration exception handling":
-        "Could not query paired Bluetooth devices:" in source,
-
-    "Bluetooth adapter exception handling":
-        "adapter = self.bt_adapter.getDefaultAdapter()" in source
-        and "return adapter != None and adapter.isEnabled()" in source,
+    "Paired Bluetooth devices converted to Python list": "return list(devices.toArray())"
+    in source,
+    "Bluetooth enumeration exception handling": "Could not query paired Bluetooth devices:"
+    in source,
+    "Bluetooth adapter exception handling": "adapter = self.bt_adapter.getDefaultAdapter()"
+    in source
+    and "return adapter != None and adapter.isEnabled()" in source,
 }
 
 for description, passed in checks.items():

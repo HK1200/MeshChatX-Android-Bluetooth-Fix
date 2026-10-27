@@ -553,8 +553,12 @@ async def test_saved_update_rechecks_checksum(mock_app, tmp_path):
     assert response.status == 404
 
 
-@pytest.mark.parametrize("channel,tag", [("beta", "beta-4.11.0"), ("testing", "nightly-20261024")])
-def test_prerelease_manifest_uses_matching_application_release(tmp_path, monkeypatch, channel, tag):
+@pytest.mark.parametrize(
+    "channel,tag", [("beta", "beta-4.11.0"), ("testing", "nightly-20261024")]
+)
+def test_prerelease_manifest_uses_matching_application_release(
+    tmp_path, monkeypatch, channel, tag
+):
     monkeypatch.delenv("MESHCHATX_UPDATE_BASE_URL", raising=False)
     manager = UpdateManager(str(tmp_path), current_version="1.0.0", channel=channel)
     releases = [
@@ -562,5 +566,10 @@ def test_prerelease_manifest_uses_matching_application_release(tmp_path, monkeyp
         {"tag_name": tag, "prerelease": True, "draft": True},
         {"tag_name": tag, "prerelease": True, "draft": False},
     ]
-    monkeypatch.setattr(manager, "_fetch_bytes", lambda *args: json.dumps(releases).encode())
-    assert manager.manifest_url() == f"https://github.com/HK1200/MeshChatX-HK/releases/download/{tag}/latest.rsm"
+    monkeypatch.setattr(
+        manager, "_fetch_bytes", lambda *args: json.dumps(releases).encode()
+    )
+    assert (
+        manager.manifest_url()
+        == f"https://github.com/HK1200/MeshChatX-HK/releases/download/{tag}/latest.rsm"
+    )

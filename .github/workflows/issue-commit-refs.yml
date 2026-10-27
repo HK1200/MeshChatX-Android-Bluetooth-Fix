@@ -9,6 +9,7 @@ name: Issue commit references
 on:
     push:
         branches:
+            - main
             - master
             - next
 

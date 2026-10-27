@@ -2764,7 +2764,9 @@
         "online": "온라인",
         "offline": "오프라인",
         "search_nodes_placeholder": "노드 검색 ({count})...",
-        "clear_search": "검색 지우기"
+        "clear_search": "검색 지우기",
+        "view_mode_radial": "방사형",
+        "view_mode_radial_full": "전체 방사형"
     },
     "banishment": {
         "title": "차단됨",
@@ -5475,7 +5477,8 @@
         "file_rejected": "File failed verification",
         "check_failed": "Update check failed",
         "apply_failed": "Update apply failed",
-        "manual_install_notice": "Install the verified file manually using the instructions above."
+        "manual_install_notice": "Install the verified file manually using the instructions above.",
+        "save_file": "파일 저장"
     },
     "traffic": {
         "upload_rate": "Upload rate",

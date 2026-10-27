@@ -24,9 +24,7 @@ const root = path.resolve(__dirname, "..");
 const pkgPath = path.join(root, "package.json");
 const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
 const version = pkg.version;
-const hk = JSON.parse(
-    fs.readFileSync(path.join(root, "hk-release.json"), "utf8")
-);
+const hk = JSON.parse(fs.readFileSync(path.join(root, "hk-release.json"), "utf8"));
 const androidDisplayVersion = hk.displayVersion;
 const androidVersionCode = hk.androidVersionCode;
 

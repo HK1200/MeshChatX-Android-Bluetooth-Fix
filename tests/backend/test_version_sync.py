@@ -43,8 +43,10 @@ def test_pyproject_version_matches_package():
 
 def test_android_version_matches_package():
     version = _package_version()
-    major, minor, patch = (int(part) for part in version.split(".")[:3])
-    version_code = major * 10000 + minor * 1000 + patch
+    release = json.loads(_text("hk-release.json"))
+    assert release["pythonVersion"] == version
+    version_code = release["androidVersionCode"]
+    version = release["displayVersion"]
     gradle = _text("android/app/build.gradle")
     assert f'versionName "{version}"' in gradle
     assert f"versionCode {version_code}" in gradle
@@ -63,6 +65,7 @@ def test_notices_and_backend_license_match_package():
 
 def test_arch_packaging_version_matches_package():
     version = _package_version()
+    version = version.replace("+", "_")
     pkgbuild = _text("packaging/arch/PKGBUILD")
     assert re.search(rf"^pkgver={re.escape(version)}", pkgbuild, re.MULTILINE)
     assert f'printf "{version}.r%s.%s"' in pkgbuild

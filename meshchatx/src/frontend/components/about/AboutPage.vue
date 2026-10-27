@@ -193,9 +193,7 @@
                                         <div class="text-xs font-semibold text-sem-fg-muted uppercase tracking-wide">
                                             Maintainer
                                         </div>
-                                        <div class="text-sm font-semibold text-sem-fg">
-                                            HK1200 — MeshChatX HK
-                                        </div>
+                                        <div class="text-sm font-semibold text-sem-fg">HK1200 — MeshChatX HK</div>
                                     </div>
 
                                     <div class="border-t border-sem-border/90"></div>

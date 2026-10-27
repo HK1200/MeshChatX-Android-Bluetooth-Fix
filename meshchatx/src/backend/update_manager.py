@@ -199,7 +199,12 @@ class UpdateManager:
             tag = release.get("tag_name", "")
             if release.get("draft") or not release.get("prerelease"):
                 continue
-            if tag.startswith(prefixes) and "/" not in tag and "\\" not in tag and ".." not in tag:
+            if (
+                tag.startswith(prefixes)
+                and "/" not in tag
+                and "\\" not in tag
+                and ".." not in tag
+            ):
                 return f"{_base_url()}/{tag}/{MANIFEST_NAME}"
         raise UpdateUnavailable("no update manifest published for this channel")
 

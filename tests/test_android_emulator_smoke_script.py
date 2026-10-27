@@ -51,14 +51,24 @@ def test_workflow_references_smoke_script():
 
 def test_smoke_launches_hk_package_and_retains_overrides():
     assignments = "\n".join(
-        line for line in _SCRIPT.read_text().splitlines()
+        line
+        for line in _SCRIPT.read_text().splitlines()
         if line.startswith(("PACKAGE=", "ACTIVITY="))
     )
     command = assignments + '\nprintf "%s\\n%s\\n" "$PACKAGE" "$ACTIVITY"'
-    env = {k: v for k, v in os.environ.items() if k not in
-           ("MESHCHATX_ANDROID_PACKAGE", "MESHCHATX_ANDROID_ACTIVITY")}
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("MESHCHATX_ANDROID_PACKAGE", "MESHCHATX_ANDROID_ACTIVITY")
+    }
     result = subprocess.check_output(["bash", "-c", command], env=env, text=True)
-    assert result.splitlines() == ["com.haadkoe.meshchatx", "com.haadkoe.meshchatx/com.meshchatx.MainActivity"]
-    env.update(MESHCHATX_ANDROID_PACKAGE="example.app", MESHCHATX_ANDROID_ACTIVITY="example.app/custom.Main")
+    assert result.splitlines() == [
+        "com.haadkoe.meshchatx",
+        "com.haadkoe.meshchatx/com.meshchatx.MainActivity",
+    ]
+    env.update(
+        MESHCHATX_ANDROID_PACKAGE="example.app",
+        MESHCHATX_ANDROID_ACTIVITY="example.app/custom.Main",
+    )
     result = subprocess.check_output(["bash", "-c", command], env=env, text=True)
     assert result.splitlines() == ["example.app", "example.app/custom.Main"]

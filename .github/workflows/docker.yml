@@ -34,6 +34,7 @@ on:
     workflow_dispatch:
     push:
         branches:
+            - main
             - master
         # Branch pushes rebuild only when image inputs change. Tag pushes still
         # run (GitHub does not apply path filters to tag pushes the same way).

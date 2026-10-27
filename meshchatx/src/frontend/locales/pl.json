@@ -2764,7 +2764,9 @@
         "online": "Online",
         "offline": "Offline",
         "search_nodes_placeholder": "Szukaj węzłów ({count})...",
-        "clear_search": "Wyczyść wyszukiwanie"
+        "clear_search": "Wyczyść wyszukiwanie",
+        "view_mode_radial": "Promieniowy",
+        "view_mode_radial_full": "Pełny promieniowy"
     },
     "banishment": {
         "title": "Wygnani",
@@ -5475,7 +5477,8 @@
         "file_rejected": "File failed verification",
         "check_failed": "Update check failed",
         "apply_failed": "Update apply failed",
-        "manual_install_notice": "Install the verified file manually using the instructions above."
+        "manual_install_notice": "Install the verified file manually using the instructions above.",
+        "save_file": "Zapisz plik"
     },
     "traffic": {
         "upload_rate": "Upload rate",

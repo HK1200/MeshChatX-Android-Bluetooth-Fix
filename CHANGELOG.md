@@ -1,3 +1,11 @@
+## 4.10.7-HK-1.0.3
+
+- Verified Android APK updates open Android’s installation confirmation directly.
+- Clear completion/cancellation feedback, retry controls and a manual Downloads fallback.
+- Preserve existing full-screen incoming-call permission during updates.
+- Prepare large installation sessions on a worker so the screen remains responsive.
+- Repair release checks for HK versioning and run checks on the main branch.
+
 ## MeshChatX HK 4.10.7-HK-1.0.1 — Android voice and Bluetooth fixes
 
 - Fix native call audio framing, playback and session cleanup.

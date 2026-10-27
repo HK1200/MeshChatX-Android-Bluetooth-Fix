@@ -11,6 +11,7 @@ name: Build Linux packages
 on:
     push:
         branches:
+            - main
             - master
         paths:
             - "package.json"
@@ -23,6 +24,7 @@ on:
             - ".github/actions/**"
     pull_request:
         branches:
+            - main
             - master
         paths:
             - "package.json"

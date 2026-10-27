@@ -1621,6 +1621,30 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
+        public String updateInstallStatus() {
+            return UpdateInstallerActivity.status(appContext());
+        }
+
+        @JavascriptInterface
+        public String installVerifiedUpdate(String pending) {
+            String[] result = {"{\"accepted\":false,\"message\":\"Return to the app and tap Install update.\"}"};
+            java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+            Runnable launch = () -> {
+                try {
+                    if (activity.hasWindowFocus() && activity.webView != null
+                        && RemoteBackendUrl.isLocalBackendUrl(activity.webView.getUrl())) {
+                        activity.startActivity(new Intent(activity, UpdateInstallerActivity.class).putExtra("pending", pending));
+                        result[0] = "{\"accepted\":true}";
+                    }
+                } finally { done.countDown(); }
+            };
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) launch.run();
+            else { activity.runOnUiThread(launch); try { done.await(2, java.util.concurrent.TimeUnit.SECONDS); }
+                catch (InterruptedException error) { Thread.currentThread().interrupt(); } }
+            return result[0];
+        }
+
+        @JavascriptInterface
         public void saveDownload(String fileName, String base64Data) {
             saveDownloadWithId(null, fileName, base64Data);
         }

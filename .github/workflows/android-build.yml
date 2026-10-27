@@ -14,6 +14,7 @@ name: Android build
 on:
     pull_request:
         branches:
+            - main
             - master
         paths-ignore:
             - "docs/**"
@@ -22,6 +23,7 @@ on:
             - "**/*.md"
     push:
         branches:
+            - main
             - master
         paths-ignore:
             - "docs/**"

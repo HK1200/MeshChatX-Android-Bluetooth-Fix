@@ -2764,7 +2764,9 @@
         "online": "在线",
         "offline": "离线",
         "search_nodes_placeholder": "搜索节点 ({count})...",
-        "clear_search": "清除搜索"
+        "clear_search": "清除搜索",
+        "view_mode_radial": "放射状",
+        "view_mode_radial_full": "完整放射状"
     },
     "banishment": {
         "title": "放逐",
@@ -5475,7 +5477,8 @@
         "file_rejected": "File failed verification",
         "check_failed": "Update check failed",
         "apply_failed": "Update apply failed",
-        "manual_install_notice": "Install the verified file manually using the instructions above."
+        "manual_install_notice": "Install the verified file manually using the instructions above.",
+        "save_file": "保存文件"
     },
     "traffic": {
         "upload_rate": "Upload rate",

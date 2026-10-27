@@ -139,16 +139,12 @@ def test_android_asset_loader_injects_aliases(monkeypatch):
     class FakeAssetFinder(importlib.abc.MetaPathFinder):
         def find_spec(self, fullname, path=None, target=None):
             if fullname == compat._OGG_MODULE:
-                return importlib.machinery.ModuleSpec(
-                    fullname, FakeAssetLoader()
-                )
+                return importlib.machinery.ModuleSpec(fullname, FakeAssetLoader())
             return None
 
     finder = compat._OggCompatFinder()
     monkeypatch.setattr(compat, "find_ogg_py", lambda: None)
-    monkeypatch.setattr(
-        sys, "meta_path", [finder, FakeAssetFinder()]
-    )
+    monkeypatch.setattr(sys, "meta_path", [finder, FakeAssetFinder()])
 
     spec = finder.find_spec(compat._OGG_MODULE, None)
 
@@ -170,7 +166,7 @@ def test_android_asset_loader_injects_aliases(monkeypatch):
     assert module.PYOGG_OGG_AVAIL is False
 
 
-def test_android_asset_loader_injects_aliases(monkeypatch):
+def test_android_asset_loader_injects_aliases_without_module_file(monkeypatch):
     """Chaquopy-style asset imports work without an ogg.py filesystem path."""
     import importlib.abc
     import importlib.machinery
@@ -185,16 +181,12 @@ def test_android_asset_loader_injects_aliases(monkeypatch):
     class FakeAssetFinder(importlib.abc.MetaPathFinder):
         def find_spec(self, fullname, path=None, target=None):
             if fullname == compat._OGG_MODULE:
-                return importlib.machinery.ModuleSpec(
-                    fullname, FakeAssetLoader()
-                )
+                return importlib.machinery.ModuleSpec(fullname, FakeAssetLoader())
             return None
 
     finder = compat._OggCompatFinder()
     monkeypatch.setattr(compat, "find_ogg_py", lambda: None)
-    monkeypatch.setattr(
-        sys, "meta_path", [finder, FakeAssetFinder()]
-    )
+    monkeypatch.setattr(sys, "meta_path", [finder, FakeAssetFinder()])
 
     spec = finder.find_spec(compat._OGG_MODULE, None)
 

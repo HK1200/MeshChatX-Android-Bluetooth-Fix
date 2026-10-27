@@ -2764,7 +2764,9 @@
         "online": "Yhteydessä",
         "offline": "Ei yhteyttä",
         "search_nodes_placeholder": "Hae solmuja ({count})...",
-        "clear_search": "Tyhjennä haku"
+        "clear_search": "Tyhjennä haku",
+        "view_mode_radial": "Säteittäinen",
+        "view_mode_radial_full": "Täysi säteittäinen"
     },
     "banishment": {
         "title": "Karkotus",
@@ -5475,7 +5477,8 @@
         "file_rejected": "File failed verification",
         "check_failed": "Update check failed",
         "apply_failed": "Update apply failed",
-        "manual_install_notice": "Install the verified file manually using the instructions above."
+        "manual_install_notice": "Install the verified file manually using the instructions above.",
+        "save_file": "Tallenna tiedosto"
     },
     "traffic": {
         "upload_rate": "Upload rate",

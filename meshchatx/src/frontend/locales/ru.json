@@ -2764,7 +2764,9 @@
         "online": "Онлайн",
         "offline": "Офлайн",
         "search_nodes_placeholder": "Поиск узлов ({count})...",
-        "clear_search": "Очистить поиск"
+        "clear_search": "Очистить поиск",
+        "view_mode_radial": "Радиальный",
+        "view_mode_radial_full": "Полный радиальный"
     },
     "banishment": {
         "title": "Забаненные",
@@ -5475,7 +5477,8 @@
         "file_rejected": "File failed verification",
         "check_failed": "Update check failed",
         "apply_failed": "Update apply failed",
-        "manual_install_notice": "Install the verified file manually using the instructions above."
+        "manual_install_notice": "Install the verified file manually using the instructions above.",
+        "save_file": "Сохранить файл"
     },
     "traffic": {
         "upload_rate": "Upload rate",

@@ -2764,7 +2764,9 @@
         "online": "Çevrimiçi",
         "offline": "Çevrimdışı",
         "search_nodes_placeholder": "Düğümleri ara ({count})...",
-        "clear_search": "Aramayı temizle"
+        "clear_search": "Aramayı temizle",
+        "view_mode_radial": "Radyal",
+        "view_mode_radial_full": "Tam radyal"
     },
     "banishment": {
         "title": "Uzaklaştırılanlar",
@@ -5475,7 +5477,8 @@
         "file_rejected": "File failed verification",
         "check_failed": "Update check failed",
         "apply_failed": "Update apply failed",
-        "manual_install_notice": "Install the verified file manually using the instructions above."
+        "manual_install_notice": "Install the verified file manually using the instructions above.",
+        "save_file": "Dosyayı kaydet"
     },
     "traffic": {
         "upload_rate": "Upload rate",

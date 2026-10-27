@@ -7,8 +7,8 @@ An Android-focused Reticulum client for messaging, voice calls, voicemail, maps 
 ## Install on Android
 
 1. Open the [latest release](https://github.com/HK1200/MeshChatX-HK/releases/latest) and download the APK for your device:
-   - **arm64:** most current Android phones and tablets, including the OnePlus 13.
-   - **x86_64:** compatible Intel/AMD Android devices and emulators.
+    - **arm64:** most current Android phones and tablets, including the OnePlus 13.
+    - **x86_64:** compatible Intel/AMD Android devices and emulators.
 2. Open the downloaded APK and allow installation from your browser or file manager when Android asks.
 3. Open **MeshChatX HK** and complete setup. Existing HK installations signed with the permanent release key can update in place.
 
@@ -20,7 +20,7 @@ Android 7.0 or later is required. No 32-bit APK is provided. Back up your Reticu
 - Android lock-screen answer handling, dialer state updates, Bluetooth headset routing and call-session cleanup.
 - Android foreground-service handling for ongoing device connections.
 - Flat, Planet and Radial visualiser views, view controls and saved preferences. WebGL with WASM is supported on capable Android WebViews; a canvas renderer is also available.
-- A built-in updater that checks HK releases and verifies a downloaded APK's signed metadata, size and checksum before saving it. Android handles installation.
+- A built-in updater that checks HK releases and verifies a downloaded APK's signed metadata, size and checksum before opening Android’s installation confirmation. A manual file-save option remains available.
 - Voicemail greetings generated with an installed offline Android text-to-speech voice, with the audio libraries needed to encode and play greetings.
 - Checksum-pinned Android dependencies and checks for 16 KB memory-page alignment, including the NumPy/OpenBLAS complex-number correction carried in 1.0.1.
 
@@ -31,6 +31,8 @@ Voicemail speech requires a suitable offline voice installed on the device. Visu
 **4.10.7-HK-1.0.2** identifies the MeshChatX base version and HK release version. The Python form is `4.10.7+hk.1.0.2`.
 
 The stable updater reads `latest.rsm` from the [latest HK application release](https://github.com/HK1200/MeshChatX-HK/releases/latest). The signed manifest and readable `latest.json` are attached alongside the APKs. There is no separate updater-feed release.
+
+After a verified download, approve Android’s update prompt. If requested, allow MeshChatX HK to install updates, then return to continue. Cancel leaves the installed app unchanged; use **Install update** to retry. Updates preserve the existing permission for full-screen incoming calls. Keep the app installed to retain its data.
 
 Official APKs retain the permanent HK signing certificate:
 

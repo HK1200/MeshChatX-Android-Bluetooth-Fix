@@ -2764,7 +2764,9 @@
         "online": "オンライン",
         "offline": "オフライン",
         "search_nodes_placeholder": "ノードを検索（{count}）...",
-        "clear_search": "検索をクリア"
+        "clear_search": "検索をクリア",
+        "view_mode_radial": "放射状",
+        "view_mode_radial_full": "放射状（全体）"
     },
     "banishment": {
         "title": "遮断済み",
@@ -5475,7 +5477,8 @@
         "file_rejected": "File failed verification",
         "check_failed": "Update check failed",
         "apply_failed": "Update apply failed",
-        "manual_install_notice": "Install the verified file manually using the instructions above."
+        "manual_install_notice": "Install the verified file manually using the instructions above.",
+        "save_file": "ファイルを保存"
     },
     "traffic": {
         "upload_rate": "Upload rate",
