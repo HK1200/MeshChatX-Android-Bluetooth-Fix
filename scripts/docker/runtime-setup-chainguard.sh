@@ -12,7 +12,10 @@ apk add --no-cache --upgrade \
     'ca-certificates>=20260909-r3' \
     'ca-certificates-bundle>=20260909-r3' \
     'curl>=8.23.0-r0' \
-    'libcurl-openssl4>=8.23.0-r0'
+    'libcurl-openssl4>=8.23.0-r0' \
+    'libbrotlicommon1>=1.2.0-r7' \
+    'libbrotlidec1>=1.2.0-r7' \
+    'libbrotlienc1>=1.2.0-r7'
 apk add --no-cache opus libffi shadow libseccomp
 
 groupadd -g 1000 meshchat
