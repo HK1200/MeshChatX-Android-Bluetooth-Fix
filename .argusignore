@@ -66,3 +66,8 @@ AST-GO-001 geo-wasm/mgrs/geolib_test.go
 AST-GO-001 geo-wasm/mgrs/proj_test.go
 AST-GO-001 geo-wasm/mgrs/ups_proj_test.go
 AST-GO-001 scripts/license_scope_mapper.go
+
+# This regression executes only the checked-in Chaquopy patch string against
+# a temporary directory and an injected list.append in place of a shell.
+# Reviewed identically in neXt; no user-provided executable content is accepted.
+AST-PY-005 tests/test_android_wheel_soname_links.py

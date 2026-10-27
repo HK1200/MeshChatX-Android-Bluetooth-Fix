@@ -132,9 +132,11 @@ jobs:
 
             - name: Resolve tag release track
               id: track
+              env:
+                  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
               run: |
                   set -euo pipefail
-                  default_branch="${{ github.event.repository.default_branch }}"
+                  default_branch="${DEFAULT_BRANCH}"
                   git fetch --no-tags origin "${default_branch}"
                   sha="$(git rev-parse HEAD)"
                   if git merge-base --is-ancestor "${sha}" "FETCH_HEAD"; then
