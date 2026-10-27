@@ -6,9 +6,10 @@ from __future__ import annotations
 import ctypes
 import importlib.abc
 import importlib.machinery
-import os
 import sys
 from pathlib import Path
+
+from meshchatx.src.env_utils import env_str
 
 _TARGET = "LXST.Codecs.libs.pyogg.library_loader"
 _installed = False
@@ -30,7 +31,7 @@ class _OpusLoader(importlib.abc.Loader):
 
         def load(names, paths=None, tests=()):
             if names.get("external") in ("opus", "ogg", "opusfile"):
-                native_dir = os.environ.get("MESHCHAT_NATIVE_LIB_DIR")
+                native_dir = env_str("MESHCHAT_NATIVE_LIB_DIR")
                 if native_dir:
                     path = Path(native_dir) / f"lib{names['external']}.so"
                     if path.is_file():
@@ -66,7 +67,7 @@ def ensure_android_opus() -> bool:
     if _installed:
         return True
 
-    native_dir = os.environ.get("MESHCHAT_NATIVE_LIB_DIR")
+    native_dir = env_str("MESHCHAT_NATIVE_LIB_DIR")
     if not native_dir:
         return False
 

@@ -404,12 +404,18 @@ AUTH_STATUS_SCHEMA: dict = {
 TELEPHONE_VOICEMAIL_STATUS_SCHEMA: dict = {
     "type": "object",
     "required": [
+        "has_tts",
+        "tts_provider",
+        "tts_supports_word_gap",
         "has_espeak",
         "is_recording",
         "is_greeting_recording",
         "has_greeting",
     ],
     "properties": {
+        "has_tts": {"type": "boolean"},
+        "tts_provider": {"type": "string"},
+        "tts_supports_word_gap": {"type": "boolean"},
         "has_espeak": {"type": "boolean"},
         "is_recording": {"type": "boolean"},
         "is_greeting_recording": {"type": "boolean"},

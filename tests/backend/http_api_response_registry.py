@@ -734,6 +734,8 @@ HTTP_JSON_GET_CONTRACTS: tuple[HttpJsonContract, ...] = (
 )
 
 HTTP_JSON_GET_CONTRACT_EXCLUDED: tuple[str, ...] = (
+    # Successful response is the verified binary APK, not JSON.
+    "/api/v1/update/payload",
     "/api/v1/auth/oidc/callback",
     "/api/v1/auth/oidc/login",
     "/api/v1/database/backup/download",

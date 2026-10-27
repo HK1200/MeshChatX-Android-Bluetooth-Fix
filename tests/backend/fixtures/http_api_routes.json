@@ -1926,6 +1926,10 @@
         },
         {
             "method": "GET",
+            "path": "/api/v1/update/payload"
+        },
+        {
+            "method": "GET",
             "path": "/api/v1/update/pending"
         },
         {

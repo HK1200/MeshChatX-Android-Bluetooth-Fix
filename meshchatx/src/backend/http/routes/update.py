@@ -15,6 +15,7 @@ from meshchatx.src.backend.constants import API_V1_PREFIX
 from meshchatx.src.backend.http.errors import (
     http_bad_request,
     http_error_from_exception,
+    http_not_found,
     http_payload_too_large,
     http_unavailable,
 )
@@ -176,9 +177,7 @@ def register_update_routes(routes, app):
             return http_unavailable("updates are disabled for this install")
         path = await asyncio.to_thread(mgr.pending_payload_path)
         if path is None:
-            return web.json_response(
-                {"error": "No verified update is staged"}, status=404
-            )
+            return http_not_found("No verified update is staged")
         return web.FileResponse(
             path,
             headers={

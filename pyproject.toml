@@ -199,6 +199,8 @@ also_copy = [
     "typings/",
     "meshchatx/__init__.py",
     "meshchatx/android_codec2.py",
+    "meshchatx/android_opus.py",
+    "meshchatx/android_tts.py",
     "meshchatx/android_push_bridge.py",
     "meshchatx/meshchat.py",
     "meshchatx/pycodec2_ctypes.py",
