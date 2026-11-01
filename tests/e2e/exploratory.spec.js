@@ -7,6 +7,7 @@ const { prepareE2eSession } = require("./helpers");
 // agentic exploration: broad UI coverage without hand-written scenarios.
 
 const ROUTES = [
+    "/traffic",
     "/",
     "/about",
     "/interfaces",
