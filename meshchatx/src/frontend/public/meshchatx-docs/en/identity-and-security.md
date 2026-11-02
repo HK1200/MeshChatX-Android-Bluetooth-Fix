@@ -227,3 +227,7 @@ On shared computers, use separate OS user accounts or separate --storage-dir val
 - **Architecture and design** for session and API details
 - **Installation and setup** for CLI security flags
 - Reticulum manual cryptography chapters for identity math
+
+## Editing contacts
+
+Use a contact's three-dot menu to edit its name. Records for the same identity are renamed together; unrelated contacts that share a name are not renamed. Changing the active identity cancels the remaining rename operations. On phones, **Add contact** stays in the header so it does not cover the last contact's controls.

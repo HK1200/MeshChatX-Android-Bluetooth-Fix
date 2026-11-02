@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import ContactsPage from "@/components/contacts/ContactsPage.vue";
 import WebSocketConnection from "@/js/WebSocketConnection";
 import ToastUtils from "@/js/ToastUtils";
+import DialogUtils from "@/js/DialogUtils";
 
 vi.mock("@/js/WebSocketConnection", () => ({
     default: {
@@ -79,6 +80,52 @@ describe("ContactsPage.vue", () => {
                 },
             },
         });
+
+    it("does not rename an unrelated same-name identity", async () => {
+        const wrapper = mountPage();
+        const prompt = vi.spyOn(DialogUtils, "prompt").mockResolvedValue("Renamed");
+        try {
+            await flushPromises();
+            const contact = { id: 12, name: "Casey", remote_identity_hash: "a".repeat(32) };
+            wrapper.vm.contacts = [
+                contact,
+                { ...contact, id: 13 },
+                { ...contact, id: 14, remote_identity_hash: "b".repeat(32) },
+            ];
+            axiosMock.patch = vi.fn().mockResolvedValue({ data: {} });
+            axiosMock.post.mockResolvedValue({ data: {} });
+            await wrapper.vm.editContactName(contact);
+            expect(axiosMock.patch.mock.calls.map((call) => call[0])).toEqual([
+                "/api/v1/telephone/contacts/12",
+                "/api/v1/telephone/contacts/13",
+            ]);
+        } finally {
+            prompt.mockRestore();
+            wrapper.unmount();
+        }
+    });
+    it("cancels an old identity's pending name prompt before any write", async () => {
+        const wrapper = mountPage();
+        let finish;
+        const prompt = vi.spyOn(DialogUtils, "prompt").mockReturnValue(
+            new Promise((resolve) => {
+                finish = resolve;
+            })
+        );
+        try {
+            await flushPromises();
+            axiosMock.patch = vi.fn();
+            const pending = wrapper.vm.editContactName({ id: 12, name: "Casey", remote_identity_hash: "a".repeat(32) });
+            await wrapper.vm.onIdentitySwitched();
+            finish("Renamed");
+            await pending;
+            expect(axiosMock.patch).not.toHaveBeenCalled();
+            expect(axiosMock.post).not.toHaveBeenCalled();
+        } finally {
+            prompt.mockRestore();
+            wrapper.unmount();
+        }
+    });
 
     it("parses lxma URI correctly", () => {
         const wrapper = mountPage();
@@ -160,11 +207,15 @@ describe("ContactsPage.vue", () => {
         expect(html).toContain("contacts.import_contacts");
     });
 
-    it("renders floating add-contact action for mobile layout", async () => {
+    it("keeps Add contact in the header instead of covering the last row", async () => {
         const wrapper = mountPage();
         await wrapper.vm.$nextTick();
         const mobileFab = wrapper.find('button[title="contacts.add_contact"]');
         expect(mobileFab.exists()).toBe(true);
+        expect(mobileFab.classes()).not.toContain("fixed");
+        expect(mobileFab.classes()).not.toContain("hidden");
+        await mobileFab.trigger("click");
+        expect(wrapper.vm.isAddDialogOpen).toBe(true);
     });
 
     it("getContacts maps total_count from telephone contacts API", async () => {
@@ -233,5 +284,15 @@ describe("ContactsPage.vue", () => {
         mountPage();
         await flushPromises();
         await vi.waitFor(() => expect(ToastUtils.error).toHaveBeenCalledWith("contacts.failed_load_contacts"));
+    });
+    it("reports a failed rename without writing the display name", async () => {
+        const wrapper = mountPage();
+        await flushPromises();
+        vi.spyOn(DialogUtils, "prompt").mockResolvedValue("New name");
+        axiosMock.patch = vi.fn().mockRejectedValueOnce(new Error("Offline"));
+        await wrapper.vm.editContactName({ id: 12, name: "Old name" });
+        expect(ToastUtils.error).toHaveBeenCalledWith("contacts.failed_update_contact");
+        expect(axiosMock.post).not.toHaveBeenCalled();
+        wrapper.unmount();
     });
 });

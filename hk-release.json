@@ -1,9 +1,9 @@
 {
     "upstreamVersion": "4.10.7",
-    "hkVersion": "1.0.3",
-    "displayVersion": "4.10.7-HK-1.0.3",
-    "pythonVersion": "4.10.7+hk.1.0.3",
-    "androidVersionCode": 100004,
+    "hkVersion": "1.0.4",
+    "displayVersion": "4.10.7-HK-1.0.4",
+    "pythonVersion": "4.10.7+hk.1.0.4",
+    "androidVersionCode": 100005,
     "buildChannel": "stable",
     "githubRepository": "HK1200/MeshChatX-HK"
 }

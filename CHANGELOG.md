@@ -1,3 +1,9 @@
+## 4.10.7-HK-1.0.4
+
+- Keep Add contact in the header on phones so it cannot cover the last contact's controls.
+- Renaming a contact updates only records belonging to the same identity, rather than unrelated people with the same name. Stop remaining rename writes when the active identity changes.
+- HK remains Reticulum-only; SIP and MeshCore improvements are part of the separate neXt release.
+
 ## 4.10.7-HK-1.0.3
 
 - Verified Android APK updates open Android’s installation confirmation directly.

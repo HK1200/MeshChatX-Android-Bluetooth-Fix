@@ -35,7 +35,12 @@
                             <MaterialDesignIcon icon-name="file-import" class="size-4" />
                             <span class="hidden sm:inline">{{ $t("contacts.import_contacts") }}</span>
                         </button>
-                        <button type="button" class="primary-chip hidden sm:inline-flex" @click="openAddDialog">
+                        <button
+                            type="button"
+                            class="primary-chip inline-flex"
+                            :title="$t('contacts.add_contact')"
+                            @click="openAddDialog"
+                        >
                             <MaterialDesignIcon icon-name="plus" class="size-4" />
                             {{ $t("contacts.add_contact") }}
                         </button>
@@ -269,15 +274,6 @@
                 </div>
             </div>
         </div>
-
-        <button
-            type="button"
-            class="sm:hidden fixed bottom-5 right-4 z-180 flex h-14 w-14 items-center justify-center rounded-full bg-sem-action-primary text-sem-action-primary-text shadow-lg ring-1 ring-sem-border transition active:scale-95 hover:bg-sem-action-primary-hover"
-            :title="$t('contacts.add_contact')"
-            @click="openAddDialog"
-        >
-            <MaterialDesignIcon icon-name="plus" class="size-7" />
-        </button>
 
         <!-- Contact context menu -->
         <ContextMenuPanel
@@ -609,6 +605,7 @@ export default {
             pendingLxmaImport: false,
             lxmaImportTimeout: null,
 
+            contactEditGeneration: 0,
             contextMenu: {
                 visible: false,
                 x: 0,
@@ -670,6 +667,7 @@ export default {
             this.totalContactsCount = 0;
             this.myQrDataUrl = null;
             this.myIdentityUri = null;
+            this.contactEditGeneration++;
             this.closeContextMenu();
             await this.getConfig();
             await this.getContacts();
@@ -923,18 +921,26 @@ export default {
         async editContactName(contact) {
             this.closeContextMenu();
             if (!contact?.id) return;
+            const generation = ++this.contactEditGeneration;
             const entered = await DialogUtils.prompt(this.$t("contacts.enter_contact_name"), contact.name);
-            if (entered == null) return;
+            if (entered == null || generation !== this.contactEditGeneration) return;
             const name = String(entered).trim();
             if (!name || name === contact.name) return;
             try {
-                const duplicates = this.contacts.filter((c) => c.name === contact.name && c.id !== contact.id);
+                const duplicates = this.contacts.filter(
+                    (c) =>
+                        c.id !== contact.id &&
+                        contact.remote_identity_hash &&
+                        c.remote_identity_hash === contact.remote_identity_hash
+                );
                 const ids = [contact.id, ...duplicates.map((c) => c.id)];
                 for (const id of ids) {
+                    if (generation !== this.contactEditGeneration) return;
                     await window.api.patch(apiPath(`/telephone/contacts/${id}`), { name });
                 }
                 const allContacts = [contact, ...duplicates];
                 for (const c of allContacts) {
+                    if (generation !== this.contactEditGeneration) return;
                     const destHash = c.remote_destination_hash || c.lxmf_address || c.remote_identity_hash;
                     if (destHash) {
                         await window.api.post(apiPath(`/destination/${destHash}/custom-display-name/update`), {
@@ -942,10 +948,12 @@ export default {
                         });
                     }
                 }
+                if (generation !== this.contactEditGeneration) return;
                 ToastUtils.success(this.$t("contacts.contact_updated"));
                 await this.getContacts();
             } catch {
-                ToastUtils.error(this.$t("contacts.failed_update_contact"));
+                if (generation === this.contactEditGeneration)
+                    ToastUtils.error(this.$t("contacts.failed_update_contact"));
             }
         },
         openConversation(contact) {
