@@ -87,6 +87,17 @@ if [[ "$E2E_LIVE_MESH" == "1" ]]; then
     listen_ip = 127.0.0.1
     listen_port = ${E2E_PEER_PORT}
 CFG
+else
+    # An absent config makes Reticulum create a multicast AutoInterface.
+    # UI-only tests must not discover or join any real network.
+    mkdir -p "$TMPDIR/rns"
+    cat > "$TMPDIR/rns/config" <<CFG
+[reticulum]
+  enable_transport = False
+  share_instance = No
+
+[interfaces]
+CFG
 fi
 
 cleanup() {
